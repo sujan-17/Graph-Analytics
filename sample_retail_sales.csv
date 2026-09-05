@@ -1,0 +1,25 @@
+Order ID,Order Date,Region,Category,Product,Sales,Profit,Quantity,Customer Type,Discount
+ORD-1001,2025-01-15,West,Technology,MacBook Pro 16,2499.00,520.00,1,Enterprise,0.00
+ORD-1002,2025-01-18,East,Furniture,Ergonomic Chair,350.00,85.00,2,Consumer,0.05
+ORD-1003,2025-02-02,South,Office Supplies,Wireless Keyboard,89.50,22.00,3,Small Business,0.00
+ORD-1004,2025-02-14,North,Technology,4K Monitor 27in,499.00,120.00,2,Enterprise,0.10
+ORD-1005,2025-03-01,West,Furniture,Standing Desk,799.00,180.00,1,Consumer,0.00
+ORD-1006,2025-03-12,East,Technology,iPhone 15 Pro,1199.00,310.00,2,Enterprise,0.00
+ORD-1007,2025-04-05,South,Office Supplies,Desk Lamp LED,45.00,12.00,5,Consumer,0.00
+ORD-1008,2025-04-20,North,Furniture,Bookshelf Wood,220.00,40.00,1,Small Business,0.15
+ORD-1009,2025-05-10,West,Technology,iPad Air 11in,699.00,165.00,3,Consumer,0.05
+ORD-1010,2025-05-22,East,Office Supplies,Paper Reams Case,65.00,18.00,10,Enterprise,0.00
+ORD-1011,2025-06-04,South,Furniture,Leather Recliner,850.00,150.00,1,Consumer,0.10
+ORD-1012,2025-06-18,North,Technology,Wireless Mouse,49.99,15.00,4,Enterprise,0.00
+ORD-1013,2025-07-01,West,Office Supplies,Gel Pens Pack,15.00,5.00,20,Consumer,0.00
+ORD-1014,2025-07-15,East,Technology,Dell XPS 15,1899.00,420.00,1,Enterprise,0.00
+ORD-1015,2025-08-02,South,Furniture,Conference Table,1450.00,290.00,1,Small Business,0.05
+ORD-1016,2025-08-20,North,Office Supplies,Shredder Heavy Duty,189.00,45.00,2,Enterprise,0.00
+ORD-1017,2025-09-05,West,Technology,USB-C Hub,59.00,20.00,5,Consumer,0.00
+ORD-1018,2025-09-25,East,Furniture,Filing Cabinet,299.00,65.00,2,Small Business,0.10
+ORD-1019,2025-10-10,South,Technology,Webcam 1080p,79.00,25.00,3,Consumer,0.00
+ORD-1020,2025-10-28,North,Office Supplies,Whiteboard 4x3,120.00,30.00,1,Enterprise,0.00
+ORD-1021,2025-11-12,West,Technology,MacBook Pro 16,4998.00,1040.00,2,Enterprise,0.00
+ORD-1022,2025-11-30,East,Furniture,Ergonomic Chair,700.00,170.00,4,Consumer,0.00
+ORD-1023,2025-12-05,South,Technology,iPhone 15 Pro,2398.00,620.00,4,Enterprise,0.05
+ORD-1024,2025-12-20,North,Furniture,Standing Desk,1598.00,360.00,2,Small Business,0.00

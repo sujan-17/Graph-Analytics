@@ -1,0 +1,13 @@
+Employee ID,Name,Department,Role,Salary,Performance Score,Years at Company,Attrition,Hire Date
+EMP-101,Sarah Jenkins,Engineering,Senior Software Engineer,135000,92,4,No,2021-03-15
+EMP-102,Michael Chang,Sales,Account Executive,95000,88,2,No,2023-01-10
+EMP-103,Emily Rodriguez,Marketing,Marketing Manager,105000,95,5,No,2020-06-01
+EMP-104,David Kim,Engineering,DevOps Specialist,120000,85,3,Yes,2022-08-20
+EMP-105,Amanda Foster,HR,HR Business Partner,88000,90,4,No,2021-11-05
+EMP-106,James Wilson,Finance,Financial Analyst,92000,82,2,No,2023-04-12
+EMP-107,Lisa Patel,Sales,Sales Manager,125000,96,6,No,2019-09-18
+EMP-108,Robert Taylor,Operations,Logistics Coordinator,75000,78,1,Yes,2024-02-01
+EMP-109,Jessica Brown,Engineering,Frontend Lead,140000,94,5,No,2020-01-15
+EMP-110,Daniel Martinez,Marketing,SEO Analyst,78000,80,2,No,2023-07-22
+EMP-111,Rachel White,Finance,Senior Accountant,98000,89,3,No,2022-05-10
+EMP-112,Chris Evans,Sales,Sales Representative,70000,72,1,Yes,2024-05-01

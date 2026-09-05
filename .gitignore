@@ -1,0 +1,52 @@
+# Environment variables & API keys
+.env
+.env.local
+.env.*.local
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+graph_analytics.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Node.js & Frontend dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Build outputs & caches
+frontend/dist/
+frontend/dist-ssr/
+.vite/
+*.tsbuildinfo
+
+# Storage uploads & generated report files
+backend/storage/datasets/*
+!backend/storage/datasets/.gitkeep
+backend/storage/reports/*
+!backend/storage/reports/.gitkeep
+backend/storage/exports/*
+!backend/storage/exports/.gitkeep
+
+# Operating System & IDE files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
