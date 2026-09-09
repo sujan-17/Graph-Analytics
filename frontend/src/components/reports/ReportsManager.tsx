@@ -135,7 +135,7 @@ export const ReportsManager: React.FC<ReportsManagerProps> = ({
                     </div>
 
                     <a
-                      href={r.download_url}
+                      href={`${r.download_url}${localStorage.getItem('token') ? `?token=${localStorage.getItem('token')}` : ''}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 text-xs font-semibold flex items-center gap-1.5 transition-colors border border-indigo-500/30 shrink-0"

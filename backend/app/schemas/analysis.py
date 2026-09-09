@@ -26,6 +26,9 @@ class AnalysisResponse(BaseModel):
     insights: Optional[str] = None
     recommendations: Optional[List[str]] = None
     follow_up_questions: Optional[List[str]] = None
+    key_findings: Optional[List[Dict[str, Any]]] = None
+    data_interpretation: Optional[str] = None
+    strategic_recommendations: Optional[List[Dict[str, Any]]] = None
     created_at: datetime
 
     class Config:

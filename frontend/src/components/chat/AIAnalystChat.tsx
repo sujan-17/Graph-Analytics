@@ -1,7 +1,65 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Plot from '../common/Plot';
-import { Send, Bot, User as UserIcon, Code2, ChevronDown, ChevronUp, Sparkles, Download, Bookmark, AlertCircle, HelpCircle, ArrowRight, Table as TableIcon } from 'lucide-react';
+import { Send, Bot, User as UserIcon, Code2, ChevronDown, ChevronUp, Sparkles, Download, Bookmark, AlertCircle, HelpCircle, ArrowRight, Table as TableIcon, Link2, Check, RotateCcw } from 'lucide-react';
 import { AnalysisResponse, DatasetProfile } from '../../types';
+import { AnalysisResultTable } from './AnalysisResultTable';
+
+interface InsightItem {
+  title: string;
+  description: string;
+}
+
+const parseInsightItem = (raw: string): InsightItem => {
+  const clean = raw.replace(/^\s*(\d+[\.\)]|\*|-|•)\s*/, '').trim();
+  const boldMatch = clean.match(/^\*\*([^*]+)\*\*[:\s-]*(.*)$/);
+  if (boldMatch) {
+    return { title: boldMatch[1].trim(), description: boldMatch[2].trim() };
+  }
+  const colonIdx = clean.indexOf(':');
+  if (colonIdx > 0 && colonIdx < 55) {
+    return {
+      title: clean.substring(0, colonIdx).replace(/\*\*/g, '').trim(),
+      description: clean.substring(colonIdx + 1).trim()
+    };
+  }
+  return { title: '', description: clean };
+};
+
+const getKeyFindings = (a: AnalysisResponse): InsightItem[] => {
+  if (a.key_findings && a.key_findings.length > 0) {
+    return a.key_findings;
+  }
+  if (a.insights) {
+    const lines = a.insights.split('\n').map(l => l.trim()).filter(Boolean);
+    const bullets = lines.filter(l => l.startsWith('•') || l.startsWith('-') || l.startsWith('*') || /^\d+[\.\)]/.test(l));
+    if (bullets.length > 0) {
+      return bullets.map(parseInsightItem);
+    }
+  }
+  return [];
+};
+
+const getDataInterpretation = (a: AnalysisResponse): string => {
+  if (a.data_interpretation) {
+    return a.data_interpretation;
+  }
+  if (a.insights) {
+    const lines = a.insights.split('\n').map(l => l.trim()).filter(Boolean);
+    const nonBullets = lines.filter(l => !l.startsWith('•') && !l.startsWith('-') && !l.startsWith('*') && !/^\d+[\.\)]/.test(l));
+    return nonBullets.join(' ') || a.insights;
+  }
+  return '';
+};
+
+const getStrategicRecommendations = (a: AnalysisResponse): InsightItem[] => {
+  if (a.strategic_recommendations && a.strategic_recommendations.length > 0) {
+    return a.strategic_recommendations;
+  }
+  if (a.recommendations && a.recommendations.length > 0) {
+    return a.recommendations.map(r => parseInsightItem(r));
+  }
+  return [];
+};
 
 interface AIAnalystChatProps {
   analyses: AnalysisResponse[];
@@ -9,6 +67,7 @@ interface AIAnalystChatProps {
   initialQuestion?: string;
   onSendQuestion: (question: string) => Promise<void>;
   onSaveInsight: (content: string, analysisId?: string) => Promise<void>;
+  onNewSession?: () => void;
 }
 
 export const AIAnalystChat: React.FC<AIAnalystChatProps> = ({
@@ -17,11 +76,13 @@ export const AIAnalystChat: React.FC<AIAnalystChatProps> = ({
   initialQuestion,
   onSendQuestion,
   onSaveInsight,
+  onNewSession,
 }) => {
   const [inputQuestion, setInputQuestion] = useState(initialQuestion || '');
   const [loading, setLoading] = useState(false);
   const [openCodeId, setOpenCodeId] = useState<string | null>(null);
   const [openPlanId, setOpenPlanId] = useState<string | null>(null);
+  const [copiedKeyFindingsId, setCopiedKeyFindingsId] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -54,19 +115,14 @@ export const AIAnalystChat: React.FC<AIAnalystChatProps> = ({
     setInputQuestion(suggestedQ);
   };
 
-  const downloadCSV = (tableData: Record<string, any>[], filename: string) => {
-    if (!tableData || tableData.length === 0) return;
-    const keys = Object.keys(tableData[0]);
-    const csvContent =
-      'data:text/csv;charset=utf-8,' +
-      [keys.join(','), ...tableData.map((row) => keys.map((k) => `"${row[k]}"`).join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `${filename}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+
+  const handleCopyKeyFindings = (id: string, items: InsightItem[]) => {
+    const text = items.map((it) => `• ${it.title ? `${it.title}: ` : ''}${it.description}`).join('\n');
+    navigator.clipboard.writeText(text);
+    setCopiedKeyFindingsId(id);
+    setTimeout(() => {
+      setCopiedKeyFindingsId(null);
+    }, 2000);
   };
 
   return (
@@ -81,9 +137,21 @@ export const AIAnalystChat: React.FC<AIAnalystChatProps> = ({
             <span className="text-slate-500">|</span>
             <span className="text-slate-400">{profile.profile.basic_info.row_count.toLocaleString()} rows</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-slate-400">Health Score:</span>
-            <span className="font-bold text-emerald-400">{profile.profile.data_quality.quality_score}%</span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-400">Health Score:</span>
+              <span className="font-bold text-emerald-400">{profile.profile.data_quality.quality_score}%</span>
+            </div>
+            {onNewSession && (
+              <button
+                onClick={onNewSession}
+                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-medium flex items-center gap-1.5 transition-colors border border-slate-700"
+                title="Start a new conversational context session"
+              >
+                <RotateCcw className="w-3 h-3 text-indigo-400" />
+                <span>New Session</span>
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -114,7 +182,9 @@ export const AIAnalystChat: React.FC<AIAnalystChatProps> = ({
           </div>
         )}
 
-        {analyses.map((a) => (
+        {[...analyses]
+          .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+          .map((a) => (
           <div key={a.id} className="space-y-4 max-w-4xl mx-auto">
             {/* User Question Bubble */}
             <div className="flex items-start gap-3 justify-end">
@@ -164,9 +234,23 @@ export const AIAnalystChat: React.FC<AIAnalystChatProps> = ({
                       <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
                         Intent: {a.intent?.intent || 'Analysis'}
                       </span>
-                      {a.intent?.metric && (
-                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
+                      {a.intent?.group_by && a.intent.group_by.length > 0 && (
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                          By: {a.intent.group_by.join(', ')}
+                        </span>
+                      )}
+                      {a.intent?.metrics && a.intent.metrics.length > 1 ? (
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                          Metrics: {a.intent.metrics.join(', ')}
+                        </span>
+                      ) : a.intent?.metric ? (
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
                           Metric: {a.intent.metric}
+                        </span>
+                      ) : null}
+                      {a.intent?.filters && Object.keys(a.intent.filters).length > 0 && (
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                          Filters: {Object.entries(a.intent.filters).map(([k, v]) => `${k}=${v}`).join(', ')}
                         </span>
                       )}
                     </div>
@@ -217,6 +301,22 @@ export const AIAnalystChat: React.FC<AIAnalystChatProps> = ({
                   </div>
                 )}
 
+                {/* Error Banner if Execution Failed or Had Errors */}
+                {(a.execution_status === 'FAILED' || (a.error_message && (!a.result_table || a.result_table.length === 0))) && (
+                  <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl space-y-2">
+                    <div className="flex items-center gap-2 text-rose-400 text-xs font-bold uppercase tracking-wider">
+                      <AlertCircle className="w-4 h-4" />
+                      <span>Execution Error Notice</span>
+                    </div>
+                    <p className="text-xs text-rose-200 font-mono">
+                      {a.error_message || 'The analysis query could not be executed.'}
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Tip: Ensure you have configured a valid Google Gemini API Key in <code className="text-slate-300 font-mono">backend/.env</code>.
+                    </p>
+                  </div>
+                )}
+
                 {/* 3. Interactive Plotly Chart Widget */}
                 {a.chart_spec && a.chart_spec.spec && (
                   <div className="p-4 bg-slate-950/50 rounded-xl border border-slate-800 space-y-2">
@@ -238,79 +338,125 @@ export const AIAnalystChat: React.FC<AIAnalystChatProps> = ({
                   </div>
                 )}
 
-                {/* 4. Result Data Table */}
+                {/* 4. Result Data Table with Sorting, Search Filtering, Pagination, and Multi-Format Exports */}
                 {a.result_table && a.result_table.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-slate-300 flex items-center gap-1.5">
-                        <TableIcon className="w-4 h-4 text-indigo-400" />
-                        <span>Execution Output Result Table ({a.result_table.length} rows)</span>
-                      </span>
-                      <button
-                        onClick={() => downloadCSV(a.result_table!, `analysis_${a.id}`)}
-                        className="text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1 text-[11px]"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>Export CSV</span>
-                      </button>
-                    </div>
-
-                    <div className="overflow-x-auto max-h-60 rounded-xl border border-slate-800">
-                      <table className="w-full text-left text-xs text-slate-300">
-                        <thead className="bg-slate-950 text-slate-300 font-semibold sticky top-0">
-                          <tr>
-                            {Object.keys(a.result_table[0]).map((k, kIdx) => (
-                              <th key={kIdx} className="p-2.5 border-b border-slate-800 whitespace-nowrap">{k}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-800/60">
-                          {a.result_table.slice(0, 20).map((row, rIdx) => (
-                            <tr key={rIdx} className="hover:bg-slate-900/60 font-mono text-[11px]">
-                              {Object.keys(row).map((k, cIdx) => (
-                                <td key={cIdx} className="p-2.5 whitespace-nowrap">{String(row[k])}</td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                  <AnalysisResultTable data={a.result_table} analysisId={a.id} />
                 )}
 
-                {/* 5. Business Insights & Recommendations */}
-                {a.insights && (
-                  <div className="p-4 bg-indigo-950/30 border border-indigo-500/20 rounded-xl space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
-                        <Sparkles className="w-4 h-4" />
-                        <span>AI Executive Business Insights</span>
-                      </h4>
-                      <button
-                        onClick={() => onSaveInsight(a.insights!, a.id)}
-                        className="px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 text-[11px] font-medium flex items-center gap-1 transition-colors border border-indigo-500/30"
-                      >
-                        <Bookmark className="w-3.5 h-3.5" />
-                        <span>Save Insight</span>
-                      </button>
-                    </div>
-                    <p className="text-xs text-slate-200 leading-relaxed font-medium">{a.insights}</p>
+                {/* 5. Executive Insights: Key Findings, Data Interpretation & Strategic Recommendations */}
+                {(() => {
+                  const keyFindings = getKeyFindings(a);
+                  const dataInterpretation = getDataInterpretation(a);
+                  const strategicRecs = getStrategicRecommendations(a);
+                  const hasExecutiveInsights = keyFindings.length > 0 || !!dataInterpretation || strategicRecs.length > 0;
 
-                    {a.recommendations && a.recommendations.length > 0 && (
-                      <div className="space-y-1 pt-2 border-t border-indigo-500/20">
-                        <p className="text-[11px] font-bold text-indigo-300">Actionable Recommendations:</p>
-                        <ul className="space-y-1 text-xs text-slate-300">
-                          {a.recommendations.map((rec, rIdx) => (
-                            <li key={rIdx} className="flex items-start gap-1.5">
-                              <span className="text-indigo-400 font-bold">•</span>
-                              <span>{rec}</span>
-                            </li>
-                          ))}
-                        </ul>
+                  if (!hasExecutiveInsights) return null;
+
+                  const fullInsightText = [
+                    keyFindings.length ? `Key Findings:\n` + keyFindings.map((k) => `• ${k.title ? `${k.title}: ` : ''}${k.description}`).join('\n') : '',
+                    dataInterpretation ? `\nData Interpretation:\n${dataInterpretation}` : '',
+                    strategicRecs.length ? `\nStrategic Recommendations:\n` + strategicRecs.map((r, i) => `${i + 1}. ${r.title ? `${r.title}: ` : ''}${r.description}`).join('\n') : ''
+                  ].filter(Boolean).join('\n') || a.insights || '';
+
+                  return (
+                    <div className="p-5 bg-slate-950/80 border border-slate-800/90 rounded-2xl space-y-5">
+                      {/* Top Header with Save Insight action */}
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>Executive Intelligence</span>
+                        </span>
+                        <button
+                          onClick={() => onSaveInsight(fullInsightText, a.id)}
+                          className="px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 text-[11px] font-medium flex items-center gap-1 transition-colors border border-indigo-500/30"
+                        >
+                          <Bookmark className="w-3.5 h-3.5" />
+                          <span>Save Insight</span>
+                        </button>
                       </div>
-                    )}
-                  </div>
-                )}
+
+                      {/* 1. Key Findings */}
+                      {keyFindings.length > 0 && (
+                        <div className="space-y-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg select-none">🎯</span>
+                            <h3 className="text-base font-bold text-slate-100 tracking-tight">Key Findings</h3>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyKeyFindings(a.id, keyFindings)}
+                              className="p-1 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-colors ml-0.5 group relative"
+                              title="Copy Key Findings to clipboard"
+                            >
+                              {copiedKeyFindingsId === a.id ? (
+                                <span className="flex items-center text-xs text-emerald-400 gap-1 font-sans">
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span className="text-[10px]">Copied!</span>
+                                </span>
+                              ) : (
+                                <Link2 className="w-4 h-4 text-slate-400 group-hover:text-indigo-400 transition-colors" />
+                              )}
+                            </button>
+                          </div>
+                          <ul className="space-y-2 pl-1">
+                            {keyFindings.map((kf, kIdx) => (
+                              <li key={kIdx} className="text-sm text-slate-300 leading-relaxed flex items-start gap-2.5">
+                                <span className="text-slate-400 font-bold select-none leading-relaxed">•</span>
+                                <div className="flex-1">
+                                  {kf.title && (
+                                    <strong className="font-semibold text-slate-100">
+                                      {kf.title}{!kf.title.trim().endsWith(':') ? ':' : ''}{' '}
+                                    </strong>
+                                  )}
+                                  <span>{kf.description}</span>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* 2. Data Interpretation */}
+                      {dataInterpretation && (
+                        <div className="space-y-2.5 pt-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg select-none">📊</span>
+                            <h3 className="text-base font-bold text-slate-100 tracking-tight">Data Interpretation</h3>
+                          </div>
+                          <p className="text-sm text-slate-300 leading-relaxed pl-1">
+                            {dataInterpretation}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* 3. Strategic Recommendations */}
+                      {strategicRecs.length > 0 && (
+                        <div className="space-y-2.5 pt-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg select-none">🚀</span>
+                            <h3 className="text-base font-bold text-slate-100 tracking-tight">Strategic Recommendations</h3>
+                          </div>
+                          <ol className="space-y-2.5 pl-1">
+                            {strategicRecs.map((rec, rIdx) => (
+                              <li key={rIdx} className="text-sm text-slate-300 leading-relaxed flex items-start gap-2.5">
+                                <span className="text-slate-400 font-semibold select-none min-w-[1.2rem] text-sm leading-relaxed">
+                                  {rIdx + 1}.
+                                </span>
+                                <div className="flex-1">
+                                  {rec.title && (
+                                    <strong className="font-semibold text-slate-100">
+                                      {rec.title}{!rec.title.trim().endsWith(':') ? ':' : ''}{' '}
+                                    </strong>
+                                  )}
+                                  <span>{rec.description}</span>
+                                </div>
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* 6. Context-Aware Suggested Follow-Up Questions */}
                 {a.follow_up_questions && a.follow_up_questions.length > 0 && (
@@ -343,7 +489,7 @@ export const AIAnalystChat: React.FC<AIAnalystChatProps> = ({
             </div>
             <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-none text-xs text-indigo-400 flex items-center gap-3">
               <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
-              <span>LangGraph Multi-Agent Workflow Executing (Understanding Intent $\rightarrow$ Planning $\rightarrow$ AST Code Gen $\rightarrow$ Sandbox Execution)...</span>
+              <span>LangGraph Multi-Agent Workflow Executing (Understanding Intent → Planning → AST Code Gen → Sandbox Execution)...</span>
             </div>
           </div>
         )}

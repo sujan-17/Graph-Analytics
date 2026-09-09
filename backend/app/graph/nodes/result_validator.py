@@ -19,7 +19,8 @@ def result_validator_node(state: AnalysisState) -> Dict[str, Any]:
                 "final_status": "FAILED",
                 "execution_error": "Execution succeeded but produced an empty DataFrame."
             }
-        summary_str = f"DataFrame result with {len(data)} rows and columns: {exec_result.get('columns')}.\nTop rows: {data[:5]}"
+        sample_rows = data[:15]
+        summary_str = f"DataFrame result with {len(data)} total rows and columns: {exec_result.get('columns')}.\nSample rows:\n" + "\n".join(str(r) for r in sample_rows)
         return {
             "validation_result": True,
             "result_summary": summary_str,

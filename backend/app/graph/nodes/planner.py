@@ -12,7 +12,7 @@ def planner_node(state: AnalysisState) -> Dict[str, Any]:
     intent = state.get("query_intent", {})
     
     plan_list = []
-    api_key = settings.GEMINI_API_KEY
+    api_key = state.get("gemini_api_key") or settings.GEMINI_API_KEY
     if api_key:
         try:
             llm = ChatGoogleGenerativeAI(

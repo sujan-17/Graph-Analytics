@@ -1,3 +1,4 @@
+import os
 import json
 import pandas as pd
 from typing import List, Dict, Any
@@ -77,6 +78,9 @@ def list_workspace_datasets(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    ws = db.query(Workspace).filter(Workspace.id == workspace_id, Workspace.user_id == current_user.id).first()
+    if not ws:
+        raise HTTPException(status_code=404, detail="Workspace not found or access denied.")
     return db.query(Dataset).filter(Dataset.workspace_id == workspace_id).order_by(Dataset.created_at.desc()).all()
 
 @router.get("/datasets/{dataset_id}/profile")
@@ -85,6 +89,12 @@ def get_dataset_profile(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    ds = db.query(Dataset).join(Workspace, Dataset.workspace_id == Workspace.id).filter(
+        Dataset.id == dataset_id,
+        Workspace.user_id == current_user.id
+    ).first()
+    if not ds:
+        raise HTTPException(status_code=404, detail="Dataset not found or access denied.")
     profile = db.query(DatasetProfile).filter(DatasetProfile.dataset_id == dataset_id).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Dataset profile not found.")
@@ -103,9 +113,12 @@ def preview_dataset(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    ds = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    ds = db.query(Dataset).join(Workspace, Dataset.workspace_id == Workspace.id).filter(
+        Dataset.id == dataset_id,
+        Workspace.user_id == current_user.id
+    ).first()
     if not ds:
-        raise HTTPException(status_code=404, detail="Dataset not found.")
+        raise HTTPException(status_code=404, detail="Dataset not found or access denied.")
     
     try:
         df = storage_service.load_dataset_dataframe(ds.storage_path)
@@ -124,9 +137,20 @@ def delete_dataset(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    ds = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    ds = db.query(Dataset).join(Workspace, Dataset.workspace_id == Workspace.id).filter(
+        Dataset.id == dataset_id,
+        Workspace.user_id == current_user.id
+    ).first()
     if not ds:
-        raise HTTPException(status_code=404, detail="Dataset not found.")
+        raise HTTPException(status_code=404, detail="Dataset not found or access denied.")
+
+    # Clean up physical storage file
+    if ds.storage_path and os.path.exists(ds.storage_path):
+        try:
+            os.remove(ds.storage_path)
+        except Exception:
+            pass
+
     db.delete(ds)
     db.commit()
     return {"status": "success", "message": "Dataset deleted."}

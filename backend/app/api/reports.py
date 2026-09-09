@@ -1,9 +1,12 @@
+import os
 import json
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from jose import jwt
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User
 from app.models.workspace import Workspace
@@ -94,6 +97,9 @@ def list_workspace_reports(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    ws = db.query(Workspace).filter(Workspace.id == workspace_id, Workspace.user_id == current_user.id).first()
+    if not ws:
+        raise HTTPException(status_code=404, detail="Workspace not found or access denied.")
     reps = db.query(Report).filter(Report.workspace_id == workspace_id).order_by(Report.created_at.desc()).all()
     return [
         {
@@ -110,9 +116,31 @@ def list_workspace_reports(
 @router.get("/reports/{id}/download")
 def download_report(
     id: str,
+    token: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db)
 ):
-    r = db.query(Report).filter(Report.id == id).first()
-    if not r or not r.file_path:
-        raise HTTPException(status_code=404, detail="Report file not found.")
+    jwt_token = None
+    if authorization and authorization.startswith("Bearer "):
+        jwt_token = authorization.split(" ")[1]
+    elif token:
+        jwt_token = token
+
+    if not jwt_token:
+        raise HTTPException(status_code=401, detail="Authentication token required to download report.")
+
+    try:
+        payload = jwt.decode(jwt_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token.")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token.")
+
+    r = db.query(Report).join(Workspace, Report.workspace_id == Workspace.id).filter(
+        Report.id == id,
+        Workspace.user_id == user_id
+    ).first()
+    if not r or not r.file_path or not os.path.exists(r.file_path):
+        raise HTTPException(status_code=404, detail="Report file not found or access denied.")
     return FileResponse(path=r.file_path, filename=f"{r.name}.pdf", media_type="application/pdf")

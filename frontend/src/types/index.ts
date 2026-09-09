@@ -111,6 +111,9 @@ export interface AnalysisResponse {
   insights?: string;
   recommendations?: string[];
   follow_up_questions?: string[];
+  key_findings?: Array<{ title: string; description: string }>;
+  data_interpretation?: string;
+  strategic_recommendations?: Array<{ title: string; description: string }>;
   created_at: string;
 }
 

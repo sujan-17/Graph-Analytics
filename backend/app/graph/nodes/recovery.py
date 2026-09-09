@@ -12,7 +12,7 @@ def recovery_node(state: AnalysisState) -> Dict[str, Any]:
     err_msg = state.get("execution_error", "Unknown error")
     
     corrected_code = ""
-    api_key = settings.GEMINI_API_KEY
+    api_key = state.get("gemini_api_key") or settings.GEMINI_API_KEY
     if api_key:
         try:
             llm = ChatGoogleGenerativeAI(
@@ -37,8 +37,14 @@ def recovery_node(state: AnalysisState) -> Dict[str, Any]:
             print(f"Recovery Node LLM Error: {e}")
 
     if not corrected_code:
-        # Fallback simple repair
-        corrected_code = "result = df.describe().reset_index()"
+        # Check for common Pandas indexing mistake: df.groupby(...)['A', 'B'] -> df.groupby(...)[['A', 'B']]
+        if failed_code and "KeyError" in err_msg:
+            repaired = re.sub(r"(\)\s*\[)(?!\s*\[)(['\"][^\]]+,\s*['\"][^\]]+)(\])", r"\1[\2]\3", failed_code)
+            if repaired != failed_code:
+                corrected_code = repaired
+        
+        if not corrected_code:
+            corrected_code = "result = df.head(50)"
 
     return {
         "generated_code": corrected_code

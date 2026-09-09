@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { User, Workspace, Dataset, DatasetProfile, AnalysisResponse, SavedInsight, Report } from '../types';
 import { Navbar } from '../components/layout/Navbar';
 import { Sidebar, TabType } from '../components/layout/Sidebar';
@@ -36,6 +36,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
   const [savedInsights, setSavedInsights] = useState<SavedInsight[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [initialQuestion, setInitialQuestion] = useState<string | undefined>(undefined);
+  const [activeConversationId, setActiveConversationId] = useState<string | undefined>(undefined);
 
   // Load workspace data
   useEffect(() => {
@@ -59,6 +60,12 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
 
       const anList = await analysisService.listAnalyses(currentWorkspace.id);
       setAnalyses(anList);
+      if (anList.length > 0) {
+        const lastWithConv = [...anList].reverse().find((a) => a.conversation_id);
+        if (lastWithConv?.conversation_id) {
+          setActiveConversationId(lastWithConv.conversation_id);
+        }
+      }
 
       const insList = await analysisService.listSavedInsights(currentWorkspace.id);
       setSavedInsights(insList);
@@ -97,9 +104,17 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
     const response = await analysisService.runAnalysis(
       currentWorkspace.id,
       question,
-      selectedDataset?.id
+      selectedDataset?.id,
+      activeConversationId
     );
+    if (response.conversation_id) {
+      setActiveConversationId(response.conversation_id);
+    }
     setAnalyses((prev) => [...prev, response]);
+  };
+
+  const handleNewSession = () => {
+    setActiveConversationId(undefined);
   };
 
   const handleSaveInsight = async (content: string, analysisId?: string) => {
@@ -171,6 +186,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
               initialQuestion={initialQuestion}
               onSendQuestion={handleSendQuestion}
               onSaveInsight={handleSaveInsight}
+              onNewSession={handleNewSession}
             />
           )}
 

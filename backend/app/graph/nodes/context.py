@@ -30,9 +30,11 @@ Column Definitions:
 
     history = state.get("conversation_history", [])
     hist_lines = []
-    for msg in history[-6:]: # Last 6 messages
+    for msg in history[-8:]: # Last 8 messages
         role = msg.get("role", "user")
-        content = msg.get("content", "")
+        content = (msg.get("content") or "").strip()
+        if role == "assistant" and len(content) > 300:
+            content = content[:300] + "..."
         hist_lines.append(f"{role.upper()}: {content}")
 
     hist_str = "\n".join(hist_lines) if hist_lines else "No previous conversation history."

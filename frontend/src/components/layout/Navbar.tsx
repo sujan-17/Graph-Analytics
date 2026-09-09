@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Network, LogOut, User as UserIcon, Plus, FolderKanban, Key } from 'lucide-react';
+import React from 'react';
+import { Network, LogOut, User as UserIcon, Plus, FolderKanban } from 'lucide-react';
 import { User, Workspace } from '../../types';
 
 interface NavbarProps {
@@ -19,15 +19,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   onCreateWorkspace,
   onLogout,
 }) => {
-  const [showKeyModal, setShowKeyModal] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState(localStorage.getItem('gemini_api_key') || '');
-
-  const saveApiKey = () => {
-    localStorage.setItem('gemini_api_key', apiKeyInput);
-    setShowKeyModal(false);
-    alert('Gemini API Key saved in local browser storage!');
-  };
-
   return (
     <header className="h-16 border-b border-slate-800 bg-slate-900/80 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-40">
       {/* Brand Logo & Name */}
@@ -73,15 +64,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         </div>
 
-        {/* API Key Modal Button */}
-        <button
-          onClick={() => setShowKeyModal(true)}
-          className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
-        >
-          <Key className="w-3.5 h-3.5 text-amber-400" />
-          <span>API Key</span>
-        </button>
-
         {/* User Pill & Logout */}
         <div className="flex items-center gap-3 pl-2 border-l border-slate-800">
           <div className="flex items-center gap-2 text-sm text-slate-300">
@@ -99,42 +81,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         </div>
       </div>
-
-      {/* API Key Modal */}
-      {showKeyModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center gap-3 text-amber-400">
-              <Key className="w-6 h-6" />
-              <h3 className="text-lg font-bold text-white">Google Gemini API Key</h3>
-            </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              The application uses Gemini API to power LangChain & LangGraph agents. Enter your key below:
-            </p>
-            <input
-              type="password"
-              placeholder="AIzaSy..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 outline-none focus:border-indigo-500 transition-colors"
-              value={apiKeyInput}
-              onChange={(e) => setApiKeyInput(e.target.value)}
-            />
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                onClick={() => setShowKeyModal(false)}
-                className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveApiKey}
-                className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-lg shadow-indigo-600/30"
-              >
-                Save Key
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </header>
   );
 };
