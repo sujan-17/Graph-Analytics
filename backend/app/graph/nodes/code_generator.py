@@ -49,10 +49,38 @@ def code_generator_node(state: AnalysisState) -> Dict[str, Any]:
         intent_metrics = intent.get("metrics") or ([intent.get("metric")] if intent.get("metric") else [])
         intent_filters = intent.get("filters") or {}
         
-        # If filters were detected (e.g. "person who buys technology in west region")
+        # If filters were detected (e.g. "person who buys technology in west region" vs "how much profit by technology in east")
         if intent_filters:
             conds = [f"(df[{repr(col)}].astype(str).str.lower() == {repr(val.lower())})" for col, val in intent_filters.items()]
-            generated_code = f"result = df[{' & '.join(conds)}].head(50)"
+            filter_expr = " & ".join(conds)
+
+            # Check if this is an explicit detail lookup vs an analytical aggregation query
+            is_detail_query = any(w in user_query.lower() for w in ["detail", "details", "who", "which person", "which customer", "list all", "list of", "records", "rows", "raw data", "orders"])
+            target_nums = [c for c in num_cols if c in intent_metrics or c.lower() in user_query.lower()]
+
+            if not is_detail_query and (intent.get("intent") in ["aggregation", "grouping", "comparison", "trend", "ranking"] or target_nums):
+                # Analytical query with filters -> Aggregate and group by primary non-filtered dimension
+                metric_cols = target_nums if target_nums else (num_cols[:2] if num_cols else [])
+                fixed_filter_cols = set(intent_filters.keys())
+                candidate_dims = [c for c in cat_cols if c not in fixed_filter_cols and not c.lower().endswith("id") and c.lower() != "id"]
+
+                if candidate_dims and metric_cols:
+                    primary_dim = candidate_dims[0]
+                    if len(metric_cols) > 1:
+                        num_list = "[" + ", ".join(repr(c) for c in metric_cols) + "]"
+                        generated_code = f"result = df[{filter_expr}].groupby({repr(primary_dim)}, as_index=False)[{num_list}].sum().sort_values({repr(metric_cols[0])}, ascending=False)"
+                    else:
+                        m = metric_cols[0]
+                        generated_code = f"result = df[{filter_expr}].groupby({repr(primary_dim)}, as_index=False)[{repr(m)}].sum().sort_values({repr(m)}, ascending=False)"
+                elif metric_cols:
+                    metric_dict_items = [f"{repr('Total ' + m)}: sub[{repr(m)}].sum()" for m in metric_cols]
+                    filter_summary_items = [f"{repr(k)}: {repr(v)}" for k, v in intent_filters.items()]
+                    all_dict_items = filter_summary_items + metric_dict_items
+                    generated_code = f"sub = df[{filter_expr}]\nresult = pd.DataFrame([{{{', '.join(all_dict_items)}}}])"
+                else:
+                    generated_code = f"result = df[{filter_expr}].head(50)"
+            else:
+                generated_code = f"result = df[{filter_expr}].head(50)"
         else:
             matched_cat = [c for c in cat_cols if c in intent_gb or c.lower() in user_query.lower()]
             matched_num = [c for c in num_cols if c in intent_metrics or c.lower() in user_query.lower()]

@@ -42,6 +42,20 @@ res_explicit = should_generate_visualization(state_explicit, cols, data)
 print("3. Explicit chart request visualization allowed:", res_explicit)
 assert res_explicit is True, "Explicit chart request MUST generate visualization"
 
+# Test 3B: Filtered analytical aggregation query (User's query scenario) -> should be True
+state_user_scenario = {
+    "user_query": "how much profit is occure by only the technology in the east in past year(jan to march)",
+    "query_intent": {"intent": "aggregation", "metric": "Profit", "filters": {"Category": "Technology", "Region": "East"}}
+}
+cols_user_scenario = ["Order ID", "Order Date", "Region", "Category", "Product", "Sales", "Profit", "Quantity", "Customer Type", "Discount"]
+data_user_scenario = [
+    {"Order ID": "ORD-1006", "Order Date": "2025-03-12", "Region": "East", "Category": "Technology", "Product": "iPhone 15 Pro", "Sales": 1199, "Profit": 310, "Quantity": 2, "Customer Type": "Enterprise", "Discount": 0},
+    {"Order ID": "ORD-1014", "Order Date": "2025-07-15", "Region": "East", "Category": "Technology", "Product": "Dell XPS 15", "Sales": 1899, "Profit": 420, "Quantity": 1, "Customer Type": "Enterprise", "Discount": 0}
+]
+res_user_scenario = should_generate_visualization(state_user_scenario, cols_user_scenario, data_user_scenario)
+print("3B. Filtered analytical aggregation visualization allowed:", res_user_scenario)
+assert res_user_scenario is True, "Filtered analytical aggregation MUST generate visualization!"
+
 # Test 4: End-to-end API test with TestClient for "give me the details of the person who buys the technology in the west region"
 print("\n=== Testing API execution for detail query ===")
 client = TestClient(app)

@@ -60,12 +60,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
 
       const anList = await analysisService.listAnalyses(currentWorkspace.id);
       setAnalyses(anList);
-      if (anList.length > 0) {
-        const lastWithConv = [...anList].reverse().find((a) => a.conversation_id);
-        if (lastWithConv?.conversation_id) {
-          setActiveConversationId(lastWithConv.conversation_id);
-        }
-      }
+      // Previous conversations reside in Analysis History. Active chat starts fresh unless explicitly opened.
 
       const insList = await analysisService.listSavedInsights(currentWorkspace.id);
       setSavedInsights(insList);
@@ -135,8 +130,32 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
     setReports(repList);
   };
 
+  // Filter analyses for the active conversational session in chat
+  const currentSessionAnalyses = useMemo(() => {
+    if (!activeConversationId) return [];
+    return analyses.filter((a) => a.conversation_id === activeConversationId);
+  }, [analyses, activeConversationId]);
+
+  // Count distinct past prompt sessions
+  const totalPastSessions = useMemo(() => {
+    const sessionIds = new Set<string>();
+    for (const a of analyses) {
+      const key = a.conversation_id || a.id;
+      if (key) sessionIds.add(key);
+    }
+    return sessionIds.size;
+  }, [analyses]);
+
+  const handleOpenConversationInChat = (conversationId: string) => {
+    setActiveConversationId(conversationId);
+    setActiveTab('analyst');
+  };
+
   const handleNavigateToAnalyst = (question?: string) => {
-    if (question) setInitialQuestion(question);
+    if (question) {
+      setInitialQuestion(question);
+      setActiveConversationId(undefined); // Start fresh session for the new prompt
+    }
     setActiveTab('analyst');
   };
 
@@ -181,16 +200,25 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
 
           {activeTab === 'analyst' && (
             <AIAnalystChat
-              analyses={analyses}
+              analyses={currentSessionAnalyses}
               profile={profile}
               initialQuestion={initialQuestion}
               onSendQuestion={handleSendQuestion}
               onSaveInsight={handleSaveInsight}
               onNewSession={handleNewSession}
+              activeConversationId={activeConversationId}
+              totalPastSessions={totalPastSessions}
+              onNavigateToHistory={() => setActiveTab('history')}
             />
           )}
 
-          {activeTab === 'history' && <AnalysisHistory analyses={analyses} />}
+          {activeTab === 'history' && (
+            <AnalysisHistory
+              analyses={analyses}
+              activeConversationId={activeConversationId}
+              onOpenInChat={handleOpenConversationInChat}
+            />
+          )}
 
           {activeTab === 'reports' && (
             <ReportsManager

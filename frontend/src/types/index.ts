@@ -108,6 +108,13 @@ export interface AnalysisResponse {
     type: string;
     spec: any;
   };
+  presentation_type?: 'visualization' | 'table' | 'kpi';
+  data_oversight?: {
+    total_records: number;
+    metric_totals?: Record<string, number>;
+    dimensions?: string[];
+    filters?: Record<string, string>;
+  };
   insights?: string;
   recommendations?: string[];
   follow_up_questions?: string[];

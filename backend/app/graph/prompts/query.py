@@ -27,10 +27,16 @@ Instructions:
      b) Merge and preserve previous grouping dimensions and metrics from the conversation history, adding or updating the newly requested filter, metric, or dimension.
      c) For example, if the previous query was "Sales and profit by Region and Category" and the user asks "Now filter that only for Enterprise customers", the intent should have:
         metrics: ["Sales", "Profit"], group_by: ["Region", "Category"], filters: {{"Customer Type": "Enterprise"}}, refers_to_previous: true.
+6. PRESENTATION DECISION (Visualization vs Table Oversight vs KPI):
+   - Determine the primary presentation format:
+     a) "visualization": Analytical queries involving aggregations, groupings, comparisons, breakdowns, distributions, or trends.
+     b) "kpi": Queries asking for a single scalar metric total/value without grouping (e.g. "total profit", "what is the average sales").
+     c) "table": Queries explicitly requesting records, rows, lists, details, or tabular oversight (e.g. "show table", "list all orders", "give me details of", "who bought", "raw data").
 
 Return JSON strictly matching this schema:
 {{
   "intent": "aggregation | grouping | filtering | ranking | comparison | trend | distribution",
+  "presentation_type": "visualization | table | kpi",
   "metric": "primary_matched_column or null",
   "metrics": ["matched_metric_1", "matched_metric_2"] or null,
   "group_by": ["matched_dimension_1", "matched_dimension_2"] or null,

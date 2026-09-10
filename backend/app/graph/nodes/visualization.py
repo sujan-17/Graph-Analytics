@@ -33,26 +33,25 @@ def should_generate_visualization(state: AnalysisState, columns: List[str], data
     if intent_type in ["filtering", "lookup", "detail", "records", "search"] and not group_by and not user_explicitly_wants_chart:
         return False
 
-    # 4. Result size check: single row or empty cannot be visualized meaningfully
-    if len(data) <= 1 and not user_explicitly_wants_chart:
+    # 4. Result size check: empty cannot be visualized
+    if len(data) == 0:
         return False
 
-    # 5. Check if the table is just individual records with ID columns
-    # (e.g. Order ID, Customer ID, Transaction ID) without aggregation
+    # 5. Check if the table is solely individual records with only ID columns and no analytical intent
     valid_cols = [c for c in columns if c.lower() not in ["index", "level_0"]]
     non_numeric_cols = []
+    genuine_dimension_cols = []
     for c in valid_cols:
         vals = [d.get(c) for d in data if d.get(c) is not None]
         if vals and not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in vals[:25]):
             non_numeric_cols.append(c)
+            is_id = any(term in c.lower() for term in ["id", "uuid", "key", "code", "number"])
+            if not is_id:
+                genuine_dimension_cols.append(c)
 
-    if non_numeric_cols:
-        primary_dim = non_numeric_cols[0]
-        is_id_col = any(term in primary_dim.lower() for term in ["id", "uuid", "key", "code", "number"])
-        unique_vals = set(d.get(primary_dim) for d in data if d.get(primary_dim) is not None)
-        # If the leading non-numeric column is an ID where nearly all rows are unique, this is a table of individual records
-        if is_id_col and len(unique_vals) >= len(data) * 0.8 and not user_explicitly_wants_chart:
-            return False
+    # If the only non-numeric column is an ID column and intent is not analytical, suppress chart
+    if non_numeric_cols and not genuine_dimension_cols and intent_type not in ["aggregation", "grouping", "comparison", "trend", "distribution", "ranking"] and not user_explicitly_wants_chart:
+        return False
 
     # 6. If intent is not an analytical intent and no grouping was requested
     analytical_intents = ["aggregation", "grouping", "comparison", "trend", "distribution", "ranking"]
@@ -68,12 +67,12 @@ def visualization_node(state: AnalysisState) -> Dict[str, Any]:
 
     raw_columns = exec_result.get("columns", [])
     data = exec_result.get("data", [])
-    if len(raw_columns) < 2 or not data:
+    if len(raw_columns) < 1 or not data:
         return {"chart_config": None}
 
     # Filter out internal index columns
     columns = [c for c in raw_columns if c.lower() not in ["index", "level_0"]]
-    if len(columns) < 2:
+    if not columns:
         return {"chart_config": None}
 
     # Check whether generating a chart is appropriate for this query
@@ -83,22 +82,67 @@ def visualization_node(state: AnalysisState) -> Dict[str, Any]:
     palette = ["#6366f1", "#06b6d4", "#10b981", "#f59e0b", "#ec4899", "#8b5cf6", "#3b82f6", "#14b8a6", "#eab308", "#ef4444"]
 
     # 1. Classify columns into numeric metric columns vs categorical/dimension columns
-    # Exclude ID columns from being treated as numeric metric columns to plot
+    # Exclude ID columns from being chosen as primary plotting dimensions
     numeric_metric_cols = []
     dimension_cols = []
+    id_cols = []
 
     for c in columns:
         c_lower = c.lower()
-        is_id = c_lower.endswith("id") or c_lower == "id" or "uuid" in c_lower
+        is_id = c_lower.endswith("id") or c_lower == "id" or "uuid" in c_lower or "_id" in c_lower
         val_sample = [d.get(c) for d in data if d.get(c) is not None]
         if not is_id and val_sample and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in val_sample[:25]):
             numeric_metric_cols.append(c)
+        elif is_id:
+            id_cols.append(c)
         else:
             dimension_cols.append(c)
+
+    # If no non-ID dimension exists, fall back to id_cols
+    if not dimension_cols and id_cols:
+        dimension_cols = id_cols
+
+    # Case for single-row KPI aggregate
+    if len(data) == 1 and numeric_metric_cols:
+        m_col = numeric_metric_cols[0]
+        val = data[0].get(m_col, 0)
+        formatted_val = f"${val:,.2f}" if any(k in m_col.lower() for k in ["sales", "profit", "revenue", "price", "cost"]) else f"{val:,.2f}"
+        traces = [{
+            "type": "indicator",
+            "mode": "number",
+            "value": val,
+            "title": {"text": f"Total {m_col}", "font": {"size": 16, "color": "#94a3b8"}},
+            "number": {"font": {"size": 42, "color": "#818cf8"}, "valueformat": ",.2f"}
+        }]
+        layout = {
+            "template": "plotly_dark",
+            "paper_bgcolor": "rgba(0,0,0,0)",
+            "plot_bgcolor": "rgba(0,0,0,0)",
+            "margin": {"l": 20, "r": 20, "t": 30, "b": 20},
+            "height": 180
+        }
+        return {
+            "chart_config": {
+                "type": "indicator",
+                "spec": {"data": traces, "layout": layout}
+            }
+        }
 
     # If there are no genuine numeric metric columns or no dimensions, skip visualization
     if not numeric_metric_cols or not dimension_cols:
         return {"chart_config": None}
+
+    # Prioritize queried metric(s) first
+    intent_m = (state.get("query_intent") or {}).get("metric")
+    intent_ms = (state.get("query_intent") or {}).get("metrics") or ([intent_m] if intent_m else [])
+    valid_intent_ms = [m for m in intent_ms if m and m in numeric_metric_cols]
+    if valid_intent_ms:
+        numeric_metric_cols.sort(key=lambda m: 0 if m in valid_intent_ms else 1)
+
+    # Prioritize varying dimensions (not fixed by filters) and genuine categorical dimensions
+    filters_dict = (state.get("query_intent") or {}).get("filters") or {}
+    fixed_filter_keys = set(filters_dict.keys())
+    dimension_cols.sort(key=lambda d: 2 if d in fixed_filter_keys else (1 if any(k in d.lower() for k in ["date", "time", "order", "id"]) else 0))
 
     # -------------------------------------------------------------
     # CASE A: 2 Dimensions + 1 Metric (e.g. Region, Category, Sales)

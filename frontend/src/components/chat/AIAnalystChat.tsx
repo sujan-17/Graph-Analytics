@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Plot from '../common/Plot';
-import { Send, Bot, User as UserIcon, Code2, ChevronDown, ChevronUp, Sparkles, Download, Bookmark, AlertCircle, HelpCircle, ArrowRight, Table as TableIcon, Link2, Check, RotateCcw } from 'lucide-react';
+import { Send, Bot, User as UserIcon, Code2, ChevronDown, ChevronUp, Sparkles, Download, Bookmark, AlertCircle, HelpCircle, ArrowRight, Table as TableIcon, Link2, Check, RotateCcw, History, BarChart3, Eye, Layers } from 'lucide-react';
 import { AnalysisResponse, DatasetProfile } from '../../types';
 import { AnalysisResultTable } from './AnalysisResultTable';
 
@@ -68,6 +68,9 @@ interface AIAnalystChatProps {
   onSendQuestion: (question: string) => Promise<void>;
   onSaveInsight: (content: string, analysisId?: string) => Promise<void>;
   onNewSession?: () => void;
+  activeConversationId?: string;
+  totalPastSessions?: number;
+  onNavigateToHistory?: () => void;
 }
 
 export const AIAnalystChat: React.FC<AIAnalystChatProps> = ({
@@ -77,13 +80,29 @@ export const AIAnalystChat: React.FC<AIAnalystChatProps> = ({
   onSendQuestion,
   onSaveInsight,
   onNewSession,
+  activeConversationId,
+  totalPastSessions,
+  onNavigateToHistory,
 }) => {
   const [inputQuestion, setInputQuestion] = useState(initialQuestion || '');
   const [loading, setLoading] = useState(false);
   const [openCodeId, setOpenCodeId] = useState<string | null>(null);
   const [openPlanId, setOpenPlanId] = useState<string | null>(null);
   const [copiedKeyFindingsId, setCopiedKeyFindingsId] = useState<string | null>(null);
+  const [activeTabs, setActiveTabs] = useState<Record<string, 'visualization' | 'table'>>({});
+  const [pendingQuestion, setPendingQuestion] = useState<string>('');
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const getActiveTab = (a: AnalysisResponse): 'visualization' | 'table' => {
+    if (activeTabs[a.id]) {
+      return activeTabs[a.id];
+    }
+    const hasChart = !!(a.chart_spec && a.chart_spec.spec);
+    if (a.presentation_type === 'table' || !hasChart) {
+      return 'table';
+    }
+    return 'visualization';
+  };
 
   useEffect(() => {
     if (initialQuestion) {
@@ -100,14 +119,16 @@ export const AIAnalystChat: React.FC<AIAnalystChatProps> = ({
     if (!inputQuestion.trim() || loading) return;
 
     const q = inputQuestion;
+    setPendingQuestion(q);
     setInputQuestion('');
     setLoading(true);
     try {
       await onSendQuestion(q);
     } catch (err) {
-      alert('Analysis execution failed. Please check backend logs or API key.');
+      alert('Analysis execution failed. Please check backend logs or try rephrasing your question.');
     } finally {
       setLoading(false);
+      setPendingQuestion('');
     }
   };
 
@@ -127,7 +148,7 @@ export const AIAnalystChat: React.FC<AIAnalystChatProps> = ({
 
   return (
     <div className="flex flex-col h-[calc(100vh-6.5rem)] glass-panel rounded-2xl border border-slate-800 overflow-hidden">
-      {/* Active Dataset Context Bar */}
+      {/* Active Dataset Context Bar & Conversational Session Controls */}
       {profile && (
         <div className="bg-slate-900/90 border-b border-slate-800 px-6 py-2.5 flex items-center justify-between text-xs text-slate-300 shrink-0">
           <div className="flex items-center gap-2">
@@ -136,19 +157,39 @@ export const AIAnalystChat: React.FC<AIAnalystChatProps> = ({
             <span className="font-mono text-indigo-300">{profile.profile.basic_info.filename}</span>
             <span className="text-slate-500">|</span>
             <span className="text-slate-400">{profile.profile.basic_info.row_count.toLocaleString()} rows</span>
+            {analyses.length > 0 && (
+              <>
+                <span className="text-slate-500">|</span>
+                <span className="px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-[11px] font-medium">
+                  {analyses.length} {analyses.length === 1 ? 'turn in session' : 'turns in session'}
+                </span>
+              </>
+            )}
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-1.5 mr-1 hidden sm:flex">
               <span className="text-slate-400">Health Score:</span>
               <span className="font-bold text-emerald-400">{profile.profile.data_quality.quality_score}%</span>
             </div>
+            {onNavigateToHistory && (totalPastSessions ?? 0) > 0 && (
+              <button
+                type="button"
+                onClick={onNavigateToHistory}
+                className="px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-medium flex items-center gap-1.5 transition-colors border border-slate-700"
+                title="View all past conversations in Analysis History"
+              >
+                <History className="w-3.5 h-3.5 text-indigo-400" />
+                <span>History ({totalPastSessions})</span>
+              </button>
+            )}
             {onNewSession && (
               <button
+                type="button"
                 onClick={onNewSession}
-                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-medium flex items-center gap-1.5 transition-colors border border-slate-700"
-                title="Start a new conversational context session"
+                className="px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-white text-[11px] font-medium flex items-center gap-1.5 transition-colors border border-indigo-500/30"
+                title="Start a fresh prompt session (previous conversation remains in Analysis History)"
               >
-                <RotateCcw className="w-3 h-3 text-indigo-400" />
+                <RotateCcw className="w-3.5 h-3.5 text-indigo-400" />
                 <span>New Session</span>
               </button>
             )}
@@ -167,6 +208,18 @@ export const AIAnalystChat: React.FC<AIAnalystChatProps> = ({
             <p className="text-xs leading-relaxed">
               Ask natural language business questions about your dataset. The multi-agent graph will understand intent, formulate an analysis plan, generate safe Pandas code, execute isolated analysis, and synthesize executive insights.
             </p>
+            {onNavigateToHistory && (totalPastSessions ?? 0) > 0 && (
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={onNavigateToHistory}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900/90 hover:bg-indigo-950/50 text-indigo-300 hover:text-white text-xs font-semibold border border-slate-700/80 hover:border-indigo-500/40 shadow-sm transition-all"
+                >
+                  <History className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>View {totalPastSessions} Past Prompt {totalPastSessions === 1 ? 'Session' : 'Sessions'} in Analysis History</span>
+                </button>
+              </div>
+            )}
             <div className="w-full space-y-2 pt-2">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Example Questions:</p>
               {profile?.profile.semantic_summary?.potential_analyses.slice(0, 3).map((q, idx) => (
@@ -312,36 +365,146 @@ export const AIAnalystChat: React.FC<AIAnalystChatProps> = ({
                       {a.error_message || 'The analysis query could not be executed.'}
                     </p>
                     <p className="text-[11px] text-slate-400">
-                      Tip: Ensure you have configured a valid Google Gemini API Key in <code className="text-slate-300 font-mono">backend/.env</code>.
+                      Tip: The system is powered by Google Gemini via server configuration in <code className="text-slate-300 font-mono">backend/.env</code>.
                     </p>
                   </div>
                 )}
 
-                {/* 3. Interactive Plotly Chart Widget */}
-                {a.chart_spec && a.chart_spec.spec && (
-                  <div className="p-4 bg-slate-950/50 rounded-xl border border-slate-800 space-y-2">
-                    <div className="w-full h-80 rounded-lg overflow-hidden">
-                      <Plot
-                        data={a.chart_spec.spec.data}
-                        layout={{
-                          ...a.chart_spec.spec.layout,
-                          autosize: true,
-                          paper_bgcolor: 'rgba(0,0,0,0)',
-                          plot_bgcolor: 'rgba(0,0,0,0)',
-                          font: { color: '#cbd5e1', family: 'Inter' }
-                        }}
-                        useResizeHandler={true}
-                        style={{ width: '100%', height: '100%' }}
-                        config={{ responsive: true, displayModeBar: false }}
-                      />
-                    </div>
-                  </div>
-                )}
+                {/* 3 & 4. Intelligent Presentation Layer: Visualization vs Data Table & Oversight */}
+                {(() => {
+                  const hasChart = !!(a.chart_spec && a.chart_spec.spec);
+                  const hasTable = !!(a.result_table && a.result_table.length > 0);
+                  if (!hasChart && !hasTable) return null;
 
-                {/* 4. Result Data Table with Sorting, Search Filtering, Pagination, and Multi-Format Exports */}
-                {a.result_table && a.result_table.length > 0 && (
-                  <AnalysisResultTable data={a.result_table} analysisId={a.id} />
-                )}
+                  const currentTab = getActiveTab(a);
+
+                  return (
+                    <div className="space-y-3">
+                      {/* View Switcher Header (when both chart and table exist) */}
+                      {hasChart && hasTable && (
+                        <div className="flex items-center justify-between pb-1 pt-1 border-b border-slate-800/80">
+                          <div className="flex items-center gap-1.5 p-1 bg-slate-950/80 border border-slate-800/90 rounded-xl text-xs">
+                            <button
+                              type="button"
+                              onClick={() => setActiveTabs(prev => ({ ...prev, [a.id]: 'visualization' }))}
+                              className={`px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 transition-all ${
+                                currentTab === 'visualization'
+                                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30 font-semibold'
+                                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                              }`}
+                            >
+                              <BarChart3 className="w-3.5 h-3.5" />
+                              <span>Visualization</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTabs(prev => ({ ...prev, [a.id]: 'table' }))}
+                              className={`px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 transition-all ${
+                                currentTab === 'table'
+                                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30 font-semibold'
+                                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                              }`}
+                            >
+                              <TableIcon className="w-3.5 h-3.5" />
+                              <span>Data Table & Oversight</span>
+                              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                                currentTab === 'table' ? 'bg-indigo-700/90 text-white' : 'bg-slate-800 text-slate-400'
+                              }`}>
+                                {a.result_table?.length}
+                              </span>
+                            </button>
+                          </div>
+
+                          <div className="text-[11px] text-slate-400 hidden sm:flex items-center gap-2">
+                            {currentTab === 'visualization' ? (
+                              <span className="flex items-center gap-1 text-indigo-400 font-medium">
+                                <Eye className="w-3.5 h-3.5" /> Interactive Chart Mode
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-slate-400 font-medium">
+                                <Layers className="w-3.5 h-3.5" /> Underlying Records & Export
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Presentation View: Visualization Hero */}
+                      {currentTab === 'visualization' && hasChart && (
+                        <div className="space-y-3">
+                          <div className="p-4 bg-slate-950/50 rounded-2xl border border-slate-800/90 space-y-2">
+                            <div className="w-full h-80 rounded-lg overflow-hidden">
+                              <Plot
+                                data={a.chart_spec!.spec.data}
+                                layout={{
+                                  ...a.chart_spec!.spec.layout,
+                                  autosize: true,
+                                  paper_bgcolor: 'rgba(0,0,0,0)',
+                                  plot_bgcolor: 'rgba(0,0,0,0)',
+                                  font: { color: '#cbd5e1', family: 'Inter' }
+                                }}
+                                useResizeHandler={true}
+                                style={{ width: '100%', height: '100%' }}
+                                config={{ responsive: true, displayModeBar: false }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Executive Data Oversight Bar (Compact Summary without table clutter) */}
+                          <div className="px-4 py-2.5 bg-slate-950/70 border border-slate-800/90 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-slate-300">
+                              <div className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                                <span className="text-slate-400">Data Oversight:</span>
+                                <span className="font-semibold text-slate-200">{a.result_table?.length || 0} records analyzed</span>
+                              </div>
+                              {a.data_oversight?.metric_totals && Object.entries(a.data_oversight.metric_totals).slice(0, 3).map(([metric, total]) => (
+                                <div key={metric} className="flex items-center gap-1">
+                                  <span className="text-slate-400">{metric}:</span>
+                                  <span className="font-semibold text-indigo-300">
+                                    {metric.toLowerCase().includes('profit') || metric.toLowerCase().includes('sales') || metric.toLowerCase().includes('revenue')
+                                      ? `$${Number(total).toLocaleString()}`
+                                      : Number(total).toLocaleString()}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+
+                            {hasTable && (
+                              <button
+                                type="button"
+                                onClick={() => setActiveTabs(prev => ({ ...prev, [a.id]: 'table' }))}
+                                className="text-[11px] font-medium text-indigo-400 hover:text-indigo-300 flex items-center gap-1 hover:underline group ml-auto"
+                              >
+                                <span>Inspect Full Table & Exports</span>
+                                <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Presentation View: Data Table & Oversight */}
+                      {(currentTab === 'table' || !hasChart) && hasTable && (
+                        <div className="space-y-2">
+                          {hasChart && (
+                            <div className="flex justify-end">
+                              <button
+                                type="button"
+                                onClick={() => setActiveTabs(prev => ({ ...prev, [a.id]: 'visualization' }))}
+                                className="text-[11px] font-medium text-indigo-400 hover:text-indigo-300 flex items-center gap-1 hover:underline"
+                              >
+                                <BarChart3 className="w-3 h-3" />
+                                <span>Switch back to Visualization</span>
+                              </button>
+                            </div>
+                          )}
+                          <AnalysisResultTable data={a.result_table!} analysisId={a.id} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* 5. Executive Insights: Key Findings, Data Interpretation & Strategic Recommendations */}
                 {(() => {
@@ -481,15 +644,32 @@ export const AIAnalystChat: React.FC<AIAnalystChatProps> = ({
           </div>
         ))}
 
-        {/* Loading Spinner Indicator */}
+        {/* Loading Spinner Indicator showing user query */}
         {loading && (
-          <div className="flex items-center gap-3 max-w-4xl mx-auto">
-            <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-indigo-400 shrink-0 border border-slate-700 animate-pulse">
-              <Bot className="w-4 h-4" />
-            </div>
-            <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-none text-xs text-indigo-400 flex items-center gap-3">
-              <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
-              <span>LangGraph Multi-Agent Workflow Executing (Understanding Intent → Planning → AST Code Gen → Sandbox Execution)...</span>
+          <div className="space-y-4 max-w-4xl mx-auto">
+            {/* Optimistic User Question Bubble while waiting */}
+            {pendingQuestion && (
+              <div className="flex items-start gap-3 justify-end">
+                <div className="bg-indigo-600 text-white rounded-2xl rounded-tr-none px-4 py-3 text-sm font-medium shadow-md shadow-indigo-600/20">
+                  {pendingQuestion}
+                </div>
+                <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0 border border-indigo-500/30">
+                  <UserIcon className="w-4 h-4" />
+                </div>
+              </div>
+            )}
+
+            {/* AI Agent Analyzing Box displaying user query */}
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-indigo-400 shrink-0 border border-slate-700 animate-pulse">
+                <Bot className="w-4 h-4" />
+              </div>
+              <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-none text-xs text-indigo-300 flex items-center gap-3">
+                <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin shrink-0" />
+                <span className="font-medium text-slate-200">
+                  {pendingQuestion || 'Analyzing query...'}
+                </span>
+              </div>
             </div>
           </div>
         )}

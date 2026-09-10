@@ -4,6 +4,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User
 from app.models.workspace import Workspace
@@ -16,11 +17,39 @@ from app.graph.graph import analysis_graph
 
 router = APIRouter(tags=["analysis"])
 
+def compute_data_oversight(result_table: Optional[List[dict]], query_intent: Optional[dict]) -> dict:
+    if not result_table:
+        return {"total_records": 0, "metric_totals": {}, "dimensions": [], "filters": {}}
+    
+    total_records = len(result_table)
+    sample = result_table[0] if result_table else {}
+    cols = list(sample.keys())
+    
+    metric_totals = {}
+    dimensions = []
+    for c in cols:
+        c_lower = c.lower()
+        if c_lower in ["index", "level_0"]:
+            continue
+        is_id = c_lower.endswith("id") or c_lower == "id" or "uuid" in c_lower or "_id" in c_lower
+        vals = [r.get(c) for r in result_table if r.get(c) is not None]
+        if not is_id and vals and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in vals[:25]):
+            total_val = sum(float(v) for v in vals)
+            metric_totals[c] = round(total_val, 2)
+        elif not is_id:
+            dimensions.append(c)
+
+    return {
+        "total_records": total_records,
+        "metric_totals": metric_totals,
+        "dimensions": dimensions[:3],
+        "filters": (query_intent or {}).get("filters", {})
+    }
+
 @router.post("/workspaces/{workspace_id}/analysis", response_model=AnalysisResponse)
 def run_conversational_analysis(
     workspace_id: str,
     req: AnalysisRequest,
-    x_gemini_api_key: Optional[str] = Header(None, alias="X-Gemini-API-Key"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -76,7 +105,7 @@ def run_conversational_analysis(
         "dataset_profile": profile_dict,
         "user_query": req.question,
         "conversation_history": history_list,
-        "gemini_api_key": x_gemini_api_key,
+        "gemini_api_key": settings.GEMINI_API_KEY,
         "dataset_profile_summary": None,
         "conversation_history_summary": None,
         "query_intent": None,
@@ -150,6 +179,17 @@ def run_conversational_analysis(
         conv.updated_at = datetime.utcnow()
     db.commit()
 
+    oversight = compute_data_oversight(final_state.get("result_table"), final_state.get("query_intent"))
+    intent_data = final_state.get("query_intent") or {}
+    pres_type = intent_data.get("presentation_type")
+    if not pres_type:
+        if intent_data.get("intent") in ["filtering", "lookup", "detail"] and not intent_data.get("group_by"):
+            pres_type = "table"
+        elif final_state.get("chart_config"):
+            pres_type = "visualization"
+        else:
+            pres_type = "table" if not final_state.get("chart_config") else "visualization"
+
     return {
         "id": new_analysis.id,
         "workspace_id": workspace_id,
@@ -166,6 +206,8 @@ def run_conversational_analysis(
         "clarification_options": final_state.get("clarification_options"),
         "result_table": final_state.get("result_table"),
         "chart_spec": final_state.get("chart_config"),
+        "presentation_type": pres_type,
+        "data_oversight": oversight,
         "insights": final_state.get("insights"),
         "recommendations": final_state.get("recommendations"),
         "follow_up_questions": final_state.get("follow_up_questions"),
@@ -193,6 +235,11 @@ def list_workspace_analyses(
         ins_dict = json.loads(r.insights) if r and r.insights else {}
         intent_obj = json.loads(a.intent_json) if a.intent_json else {}
 
+        item_oversight = compute_data_oversight(res_table, intent_obj)
+        pres_type = intent_obj.get("presentation_type") if isinstance(intent_obj, dict) else None
+        if not pres_type:
+            pres_type = "visualization" if chart_spec else "table"
+
         res_list.append({
             "id": a.id,
             "workspace_id": a.workspace_id,
@@ -209,6 +256,8 @@ def list_workspace_analyses(
             "clarification_options": intent_obj.get("clarification_options") if isinstance(intent_obj, dict) else None,
             "result_table": res_table,
             "chart_spec": chart_spec,
+            "presentation_type": pres_type,
+            "data_oversight": item_oversight,
             "insights": ins_dict.get("insights"),
             "recommendations": ins_dict.get("recommendations"),
             "follow_up_questions": ins_dict.get("follow_up_questions"),
