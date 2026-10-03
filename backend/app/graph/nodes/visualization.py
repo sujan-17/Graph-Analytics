@@ -4,10 +4,10 @@ from app.graph.state import AnalysisState
 def should_generate_visualization(state: AnalysisState, columns: List[str], data: List[Dict[str, Any]]) -> bool:
     """
     Determines whether generating a chart is analytically meaningful.
-    Charts are generated ONLY for aggregations, groupings, comparisons, trends,
-    or when explicitly requested by the user.
-    Detail, lookup, and raw record filtering queries (e.g. 'give me the details of the person...')
-    must NOT generate a chart.
+    Charts are generated for aggregations, groupings, comparisons, trends,
+    or whenever an analytical metric/dimension breakdown is present.
+    Detail/raw table queries (e.g. 'show raw records', 'details of order 123')
+    must NOT generate a chart unless explicitly requested.
     """
     user_query = (state.get("user_query") or "").lower().strip()
     query_intent = state.get("query_intent") or {}
@@ -15,17 +15,16 @@ def should_generate_visualization(state: AnalysisState, columns: List[str], data
     group_by = query_intent.get("group_by") or []
 
     # 1. User explicitly requested a chart/plot/visual
-    chart_keywords = ["chart", "plot", "graph", "visualize", "visualization", "histogram", "pie", "trend", "scatter"]
+    chart_keywords = ["chart", "plot", "graph", "visualize", "visualization", "histogram", "pie", "trend", "scatter", "bar"]
     user_explicitly_wants_chart = any(k in user_query for k in chart_keywords)
 
     # 2. Detail / record lookup queries: NEVER generate chart unless explicitly requested
-    detail_keywords = [
-        "detail", "details", "who", "which person", "which customer", "which buyer",
-        "person", "customer", "buyer", "list of", "list all", "show records",
-        "show rows", "raw data", "orders", "lookup", "give me the details",
-        "find the person", "find the customer", "show me the details", "give me details"
+    detail_phrases = [
+        "give me details", "give me the details", "show me details", "show details",
+        "detail of", "details of", "list all rows", "list all records", "show records",
+        "show rows", "raw data", "raw records", "dump data"
     ]
-    is_detail_query = any(k in user_query for k in detail_keywords)
+    is_detail_query = any(k in user_query for k in detail_phrases)
     if is_detail_query and not user_explicitly_wants_chart:
         return False
 
@@ -37,28 +36,16 @@ def should_generate_visualization(state: AnalysisState, columns: List[str], data
     if len(data) == 0:
         return False
 
-    # 5. Check if the table is solely individual records with only ID columns and no analytical intent
-    valid_cols = [c for c in columns if c.lower() not in ["index", "level_0"]]
-    non_numeric_cols = []
-    genuine_dimension_cols = []
-    for c in valid_cols:
-        vals = [d.get(c) for d in data if d.get(c) is not None]
-        if vals and not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in vals[:25]):
-            non_numeric_cols.append(c)
-            is_id = any(term in c.lower() for term in ["id", "uuid", "key", "code", "number"])
-            if not is_id:
-                genuine_dimension_cols.append(c)
-
-    # If the only non-numeric column is an ID column and intent is not analytical, suppress chart
-    if non_numeric_cols and not genuine_dimension_cols and intent_type not in ["aggregation", "grouping", "comparison", "trend", "distribution", "ranking"] and not user_explicitly_wants_chart:
-        return False
-
-    # 6. If intent is not an analytical intent and no grouping was requested
+    # 5. Analytical intents or grouping always warrant a visualization
     analytical_intents = ["aggregation", "grouping", "comparison", "trend", "distribution", "ranking"]
-    if intent_type not in analytical_intents and not group_by and not user_explicitly_wants_chart:
-        return False
+    if intent_type in analytical_intents or group_by or any(w in user_query for w in ["average", "avg", "mean", "per", "by", "total", "sum", "count", "distribution", "highest", "lowest", "top"]):
+        return True
 
     return True
+
+def is_col_id(name: str) -> bool:
+    n = name.lower()
+    return n.endswith("_id") or n.endswith("id") or n == "id" or "uuid" in n or n.endswith("_no") or "code" in n
 
 def visualization_node(state: AnalysisState) -> Dict[str, Any]:
     exec_result = state.get("execution_result", {})
@@ -82,40 +69,55 @@ def visualization_node(state: AnalysisState) -> Dict[str, Any]:
     palette = ["#6366f1", "#06b6d4", "#10b981", "#f59e0b", "#ec4899", "#8b5cf6", "#3b82f6", "#14b8a6", "#eab308", "#ef4444"]
 
     # 1. Classify columns into numeric metric columns vs categorical/dimension columns
-    # Exclude ID columns from being chosen as primary plotting dimensions
     numeric_metric_cols = []
     dimension_cols = []
     id_cols = []
 
     for c in columns:
-        c_lower = c.lower()
-        is_id = c_lower.endswith("id") or c_lower == "id" or "uuid" in c_lower or "_id" in c_lower
         val_sample = [d.get(c) for d in data if d.get(c) is not None]
-        if not is_id and val_sample and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in val_sample[:25]):
+        
+        is_num = False
+        if val_sample:
+            try:
+                for v in val_sample[:25]:
+                    if isinstance(v, bool):
+                        raise TypeError
+                    float(v)
+                is_num = True
+            except (ValueError, TypeError):
+                is_num = False
+
+        if not is_col_id(c) and is_num:
             numeric_metric_cols.append(c)
-        elif is_id:
+        elif is_col_id(c):
             id_cols.append(c)
         else:
             dimension_cols.append(c)
 
     # If no non-ID dimension exists, fall back to id_cols
     if not dimension_cols and id_cols:
-        dimension_cols = id_cols
+        dimension_cols = [id_cols[0]]
 
     # Case for single-row KPI aggregate
     if len(data) == 1 and numeric_metric_cols:
         m_col = numeric_metric_cols[0]
         val = data[0].get(m_col, 0)
-        formatted_val = f"${val:,.2f}" if any(k in m_col.lower() for k in ["sales", "profit", "revenue", "price", "cost"]) else f"{val:,.2f}"
+        try:
+            val_flt = float(val)
+            formatted_val = f"${val_flt:,.2f}" if any(k in m_col.lower() for k in ["sales", "profit", "revenue", "price", "cost"]) else f"{val_flt:,.2f}"
+        except Exception:
+            formatted_val = str(val)
+            val_flt = 0.0
+
         traces = [{
             "type": "indicator",
             "mode": "number",
-            "value": val,
-            "title": {"text": f"Total {m_col}", "font": {"size": 16, "color": "#94a3b8"}},
-            "number": {"font": {"size": 42, "color": "#818cf8"}, "valueformat": ",.2f"}
+            "value": val_flt,
+            "title": {"text": f"{m_col}", "font": {"size": 16, "color": "#475569"}},
+            "number": {"font": {"size": 42, "color": "#4f46e5"}, "valueformat": ",.2f"}
         }]
         layout = {
-            "template": "plotly_dark",
+            "template": "plotly_white",
             "paper_bgcolor": "rgba(0,0,0,0)",
             "plot_bgcolor": "rgba(0,0,0,0)",
             "margin": {"l": 20, "r": 20, "t": 30, "b": 20},
@@ -163,7 +165,6 @@ def visualization_node(state: AnalysisState) -> Dict[str, Any]:
             if v2 is not None and v2 not in unique_dim2:
                 unique_dim2.append(v2)
 
-        # If dim2 has <= 10 unique categories, build standard grouped bar chart traces
         if len(unique_dim2) <= 10:
             val_map = {}
             for d in data:
@@ -186,7 +187,7 @@ def visualization_node(state: AnalysisState) -> Dict[str, Any]:
                 "xaxis": {"title": dim1},
                 "yaxis": {"title": m_col},
                 "barmode": "group",
-                "template": "plotly_dark",
+                "template": "plotly_white",
                 "margin": {"l": 40, "r": 40, "t": 40, "b": 50},
                 "legend": {"title": {"text": dim2}, "orientation": "h", "y": -0.2}
             }
@@ -198,7 +199,7 @@ def visualization_node(state: AnalysisState) -> Dict[str, Any]:
                 }
             }
         else:
-            subset = data[:40]
+            subset = data[:30]
             x_vals = [f"{d.get(dim1)} - {d.get(dim2)}" for d in subset]
             y_vals = [d.get(m_col) for d in subset]
             trace = {
@@ -212,7 +213,7 @@ def visualization_node(state: AnalysisState) -> Dict[str, Any]:
                 "title": f"{m_col} by {dim1} & {dim2}",
                 "xaxis": {"title": f"{dim1} & {dim2}"},
                 "yaxis": {"title": m_col},
-                "template": "plotly_dark",
+                "template": "plotly_white",
                 "margin": {"l": 40, "r": 40, "t": 40, "b": 60}
             }
             return {
@@ -225,11 +226,10 @@ def visualization_node(state: AnalysisState) -> Dict[str, Any]:
     # -------------------------------------------------------------
     # CASE B: 2+ Dimensions + Multiple Metrics
     # (e.g. Region, Category, Sales, Profit)
-    # Composite category labels on x-axis, grouped metric bars
     # -------------------------------------------------------------
     if len(dimension_cols) >= 2 and len(numeric_metric_cols) >= 2:
-        subset = data[:30]
-        x_vals = [" - ".join(str(d.get(c, "")) for c in dimension_cols) for d in subset]
+        subset = data[:25]
+        x_vals = [" - ".join(str(d.get(c, "")) for c in dimension_cols[:2]) for d in subset]
         traces = []
         for idx, m_col in enumerate(numeric_metric_cols[:4]):
             y_vals = [d.get(m_col) for d in subset]
@@ -248,7 +248,7 @@ def visualization_node(state: AnalysisState) -> Dict[str, Any]:
             "xaxis": {"title": dim_title},
             "yaxis": {"title": "Value"},
             "barmode": "group",
-            "template": "plotly_dark",
+            "template": "plotly_white",
             "margin": {"l": 40, "r": 40, "t": 40, "b": 60},
             "legend": {"orientation": "h", "y": -0.2}
         }
@@ -261,12 +261,11 @@ def visualization_node(state: AnalysisState) -> Dict[str, Any]:
 
     # -------------------------------------------------------------
     # CASE C: 3+ Dimensions + 1 Metric
-    # Composite hierarchy labels on x-axis
     # -------------------------------------------------------------
     if len(dimension_cols) >= 3 and len(numeric_metric_cols) == 1:
         m_col = numeric_metric_cols[0]
-        subset = data[:30]
-        x_vals = [" / ".join(str(d.get(c, "")) for c in dimension_cols) for d in subset]
+        subset = data[:25]
+        x_vals = [" / ".join(str(d.get(c, "")) for c in dimension_cols[:3]) for d in subset]
         trace = {
             "name": m_col,
             "x": x_vals,
@@ -278,7 +277,7 @@ def visualization_node(state: AnalysisState) -> Dict[str, Any]:
             "title": f"{m_col} by {' & '.join(dimension_cols[:3])}",
             "xaxis": {"title": " / ".join(dimension_cols[:3])},
             "yaxis": {"title": m_col},
-            "template": "plotly_dark",
+            "template": "plotly_white",
             "margin": {"l": 40, "r": 40, "t": 40, "b": 60}
         }
         return {
@@ -290,16 +289,23 @@ def visualization_node(state: AnalysisState) -> Dict[str, Any]:
 
     # -------------------------------------------------------------
     # CASE D: 1 Dimension + 1 or More Metrics (Standard Case)
-    # Single categorical or date dimension
+    # Includes entity breakdowns like Customer, Product, etc.
     # -------------------------------------------------------------
     dim_col = dimension_cols[0]
     is_date = any(k in dim_col.lower() for k in ["date", "time", "month", "year", "quarter", "day"])
     chart_type = "line" if is_date else "bar"
 
-    x_vals = [d.get(dim_col) for d in data]
+    # Subset to Top 20 for non-date charts to ensure beautiful, uncluttered visualization
+    is_subset = False
+    chart_data = data
+    if len(data) > 20 and not is_date:
+        chart_data = data[:20]
+        is_subset = True
+
+    x_vals = [str(d.get(dim_col, "")) for d in chart_data]
     traces = []
     for idx, m_col in enumerate(numeric_metric_cols[:4]):
-        y_vals = [d.get(m_col) for d in data]
+        y_vals = [d.get(m_col) for d in chart_data]
         color = palette[idx % len(palette)]
         trace = {
             "name": m_col,
@@ -311,15 +317,26 @@ def visualization_node(state: AnalysisState) -> Dict[str, Any]:
         if chart_type == "line":
             trace["mode"] = "lines+markers"
             trace["line"] = {"width": 2.5}
+        
+        # If an ID column exists and is not dim_col, add to hover text
+        if id_cols and id_cols[0] != dim_col:
+            id_col_name = id_cols[0]
+            trace["hovertext"] = [
+                f"{id_col_name}: {d.get(id_col_name)}<br>{dim_col}: {d.get(dim_col)}<br>{m_col}: {d.get(m_col)}"
+                for d in chart_data
+            ]
+            trace["hoverinfo"] = "text"
+
         traces.append(trace)
 
+    title_prefix = "Top 20 " if is_subset else ""
     metrics_str = ", ".join(numeric_metric_cols[:4])
     layout = {
-        "title": f"{metrics_str} by {dim_col}",
+        "title": f"{title_prefix}{metrics_str} by {dim_col}",
         "xaxis": {"title": dim_col},
         "yaxis": {"title": numeric_metric_cols[0] if len(numeric_metric_cols) == 1 else "Value"},
-        "template": "plotly_dark",
-        "margin": {"l": 40, "r": 40, "t": 40, "b": 40},
+        "template": "plotly_white",
+        "margin": {"l": 40, "r": 40, "t": 40, "b": 60},
         "legend": {"orientation": "h", "y": -0.2} if len(traces) > 1 else {"visible": False}
     }
     if chart_type == "bar" and len(traces) > 1:

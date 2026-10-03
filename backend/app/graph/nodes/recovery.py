@@ -12,29 +12,20 @@ def recovery_node(state: AnalysisState) -> Dict[str, Any]:
     err_msg = state.get("execution_error", "Unknown error")
     
     corrected_code = ""
-    api_key = state.get("gemini_api_key") or settings.GEMINI_API_KEY
-    if api_key:
-        try:
-            llm = ChatGoogleGenerativeAI(
-                model=settings.LLM_MODEL,
-                google_api_key=api_key,
-                temperature=0.1
-            )
-            prompt = RECOVERY_PROMPT.format(
-                dataset_profile_summary=profile_summary,
-                failed_code=failed_code,
-                error_message=err_msg,
-                user_query=user_query
-            )
-            response = llm.invoke(prompt)
-            content = response.content
-            code_match = re.search(r"```python\s*(.*?)\s*```", content, re.DOTALL)
-            if code_match:
-                corrected_code = code_match.group(1).strip()
-            else:
-                corrected_code = content.strip()
-        except Exception as e:
-            print(f"Recovery Node LLM Error: {e}")
+    from app.core.llm import call_gemini_llm
+    prompt = RECOVERY_PROMPT.format(
+        dataset_profile_summary=profile_summary,
+        failed_code=failed_code,
+        error_message=err_msg,
+        user_query=user_query
+    )
+    llm_output = call_gemini_llm(prompt, temperature=0.1, custom_api_key=state.get("gemini_api_key"))
+    if llm_output:
+        code_match = re.search(r"```python\s*(.*?)\s*```", llm_output, re.DOTALL)
+        if code_match:
+            corrected_code = code_match.group(1).strip()
+        else:
+            corrected_code = llm_output.strip()
 
     if not corrected_code:
         # Check for common Pandas indexing mistake: df.groupby(...)['A', 'B'] -> df.groupby(...)[['A', 'B']]

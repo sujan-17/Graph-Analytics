@@ -68,10 +68,10 @@ export function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-indigo-400">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-indigo-600">
         <div className="flex items-center gap-3">
-          <div className="w-6 h-6 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
-          <span className="font-semibold text-sm">Loading Graph Analytics...</span>
+          <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+          <span className="font-semibold text-sm text-slate-800">Loading Graph Analytics...</span>
         </div>
       </div>
     );

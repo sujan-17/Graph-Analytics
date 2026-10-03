@@ -1,8 +1,7 @@
 import json
 import re
 from typing import Dict, Any
-from langchain_google_genai import ChatGoogleGenerativeAI
-from app.core.config import settings
+from app.core.llm import call_gemini_llm
 from app.graph.state import AnalysisState
 from app.graph.prompts.planner import PLANNER_PROMPT
 
@@ -12,26 +11,20 @@ def planner_node(state: AnalysisState) -> Dict[str, Any]:
     intent = state.get("query_intent", {})
     
     plan_list = []
-    api_key = state.get("gemini_api_key") or settings.GEMINI_API_KEY
-    if api_key:
+    prompt = PLANNER_PROMPT.format(
+        dataset_profile_summary=profile_summary,
+        query_intent=json.dumps(intent),
+        user_query=user_query
+    )
+    llm_output = call_gemini_llm(prompt, temperature=0.1, custom_api_key=state.get("gemini_api_key"))
+    if llm_output:
         try:
-            llm = ChatGoogleGenerativeAI(
-                model=settings.LLM_MODEL,
-                google_api_key=api_key,
-                temperature=0.1
-            )
-            prompt = PLANNER_PROMPT.format(
-                dataset_profile_summary=profile_summary,
-                query_intent=json.dumps(intent),
-                user_query=user_query
-            )
-            response = llm.invoke(prompt)
-            json_match = re.search(r"\{.*\}", response.content, re.DOTALL)
+            json_match = re.search(r"\{.*\}", llm_output, re.DOTALL)
             if json_match:
                 plan_data = json.loads(json_match.group(0))
                 plan_list = plan_data.get("plan", [])
         except Exception as e:
-            print(f"Planner Node LLM Error: {e}")
+            print(f"Planner JSON Parse Error: {e}")
 
     if not plan_list:
         plan_list = [

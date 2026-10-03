@@ -106,13 +106,13 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="p-6 rounded-2xl glass-panel border border-slate-800 flex flex-wrap items-center justify-between gap-4">
+      <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
-            <History className="w-5 h-5 text-indigo-400" />
+          <h2 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+            <History className="w-5 h-5 text-indigo-600" />
             <span>Analysis History & Prompt Sessions</span>
           </h2>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             Complete audit trail of past conversational prompts, execution outputs, data tables, and AI insights.
           </p>
         </div>
@@ -124,10 +124,10 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search past prompts..."
-              className="bg-slate-900/90 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-indigo-500 w-48 transition-colors"
+              className="bg-slate-50 border border-slate-300 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:border-indigo-600 w-48 transition-colors"
             />
           </div>
-          <span className="text-xs px-3 py-1 rounded-lg bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-medium">
+          <span className="text-xs px-3 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 font-medium">
             {threads.length} {threads.length === 1 ? 'Prompt Session' : 'Prompt Sessions'} ({analyses.length} total queries)
           </span>
         </div>
@@ -135,19 +135,19 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
 
       {/* Empty State */}
       {threads.length === 0 ? (
-        <div className="p-16 text-center border border-dashed border-slate-800 rounded-2xl text-slate-400 space-y-3">
-          <div className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-500">
+        <div className="p-16 text-center border border-dashed border-slate-300 rounded-2xl bg-white text-slate-500 space-y-3 shadow-xs">
+          <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto text-indigo-600">
             <History className="w-6 h-6" />
           </div>
-          <p className="text-sm font-medium text-slate-300">No analysis history in this workspace yet.</p>
+          <p className="text-sm font-medium text-slate-800">No analysis history in this workspace yet.</p>
           <p className="text-xs text-slate-500">Ask a question in the AI Analyst tab to start your first analysis!</p>
         </div>
       ) : filteredThreads.length === 0 ? (
-        <div className="p-12 text-center border border-dashed border-slate-800 rounded-2xl text-slate-400 space-y-2">
-          <p className="text-sm text-slate-300">No prompt sessions match "{searchQuery}"</p>
+        <div className="p-12 text-center border border-dashed border-slate-300 rounded-2xl bg-white text-slate-500 space-y-2 shadow-xs">
+          <p className="text-sm text-slate-800">No prompt sessions match "{searchQuery}"</p>
           <button
             onClick={() => setSearchQuery('')}
-            className="text-xs text-indigo-400 hover:text-indigo-300 underline"
+            className="text-xs text-indigo-600 hover:text-indigo-800 underline"
           >
             Clear search filter
           </button>
@@ -162,43 +162,43 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
             return (
               <div
                 key={thread.conversationId}
-                className={`rounded-2xl glass-card border transition-all duration-200 overflow-hidden ${
-                  isActive ? 'border-cyan-500/40 ring-1 ring-cyan-500/20' : 'border-slate-800/90'
+                className={`rounded-2xl bg-white border transition-all duration-200 overflow-hidden shadow-sm ${
+                  isActive ? 'border-indigo-400 ring-2 ring-indigo-50' : 'border-slate-200'
                 }`}
               >
                 {/* Specific Prompt Header Row */}
                 <div
                   onClick={() => setExpandedThreadId(isExpanded ? null : thread.conversationId)}
-                  className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-900/50 transition-colors select-none"
+                  className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors select-none"
                 >
                   <div className="space-y-1.5 flex-1 pr-4">
                     <div className="flex flex-wrap items-center gap-2.5">
-                      <span className="font-bold text-sm text-slate-100 leading-snug">
+                      <span className="font-bold text-sm text-slate-900 leading-snug">
                         {thread.rootQuestion}
                       </span>
                       {isActive && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse" />
                           <span>Active in Chat</span>
                         </span>
                       )}
                       <span
                         className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                           isSuccess
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-rose-50 text-rose-700 border border-rose-200'
                         }`}
                       >
                         {thread.latestStatus}
                       </span>
                       {thread.analyses.length > 1 && (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 flex items-center gap-1">
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 flex items-center gap-1">
                           <MessageSquare className="w-3 h-3" />
                           <span>{thread.analyses.length} turns in conversation</span>
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-slate-400">
+                    <p className="text-[11px] text-slate-500">
                       Executed: {new Date(thread.createdAt).toLocaleString()}
                       {thread.analyses.length > 1 && ` (last active: ${new Date(thread.updatedAt).toLocaleTimeString()})`}
                     </p>
@@ -211,10 +211,10 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
                           e.stopPropagation();
                           onOpenInChat(thread.conversationId);
                         }}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm ${
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs ${
                           isActive
-                            ? 'bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-200 border border-cyan-500/40'
-                            : 'bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 hover:text-white border border-indigo-500/30'
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-800 border border-indigo-200'
                         }`}
                         title="Resume this conversation in the AI Analyst Chat tab"
                       >
@@ -224,7 +224,7 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
                       </button>
                     )}
                     <button
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
                       title={isExpanded ? 'Collapse prompt details' : 'Expand conversation history'}
                     >
                       {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
@@ -234,26 +234,26 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
 
                 {/* Expanded Conversation Details Inside This Specific Prompt */}
                 {isExpanded && (
-                  <div className="p-5 pt-3 border-t border-slate-800/80 bg-slate-950/40 space-y-6">
-                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 pb-1 border-b border-slate-800/60">
-                      <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
+                  <div className="p-5 pt-3 border-t border-slate-100 bg-slate-50/50 space-y-6">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 pb-1 border-b border-slate-200">
+                      <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
                       <span>Conversation Thread History ({thread.analyses.length} {thread.analyses.length === 1 ? 'Turn' : 'Turns'})</span>
                     </div>
 
                     {thread.analyses.map((a, idx) => (
                       <div
                         key={a.id}
-                        className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800/90 space-y-4 shadow-lg"
+                        className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4 shadow-sm"
                       >
                         {/* Turn Header / Question */}
-                        <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                        <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
                           <div className="flex items-center gap-2.5">
-                            <span className="w-6 h-6 rounded-lg bg-indigo-600/20 text-indigo-300 flex items-center justify-center font-bold text-xs border border-indigo-500/30">
+                            <span className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-xs border border-indigo-200">
                               {idx + 1}
                             </span>
-                            <span className="font-bold text-sm text-white">{a.question}</span>
+                            <span className="font-bold text-sm text-slate-900">{a.question}</span>
                           </div>
-                          <span className="text-[11px] text-slate-500 font-mono">
+                          <span className="text-[11px] text-slate-400 font-mono">
                             {new Date(a.created_at).toLocaleTimeString()}
                           </span>
                         </div>
@@ -261,21 +261,21 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
                         {/* Intent Badges */}
                         {a.intent && (
                           <div className="flex flex-wrap items-center gap-2 text-[10px]">
-                            <span className="font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                            <span className="font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
                               Intent: {a.intent.intent}
                             </span>
                             {a.intent.group_by && a.intent.group_by.length > 0 && (
-                              <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-medium">
+                              <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 font-medium">
                                 By: {a.intent.group_by.join(', ')}
                               </span>
                             )}
                             {a.intent.metrics && a.intent.metrics.length > 0 && (
-                              <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-medium">
+                              <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 font-medium">
                                 Metrics: {a.intent.metrics.join(', ')}
                               </span>
                             )}
                             {a.intent.filters && Object.keys(a.intent.filters).length > 0 && (
-                              <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30 font-medium">
+                              <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-medium">
                                 Filters: {Object.entries(a.intent.filters).map(([k, v]) => `${k}=${v}`).join(', ')}
                               </span>
                             )}
@@ -294,15 +294,15 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
                             <div className="space-y-3 pt-1">
                               {/* View Switcher Header */}
                               {hasChart && hasTable && (
-                                <div className="flex items-center justify-between pb-1 border-b border-slate-800/80">
-                                  <div className="flex items-center gap-1.5 p-1 bg-slate-950/80 border border-slate-800/90 rounded-xl text-xs">
+                                <div className="flex items-center justify-between pb-1 border-b border-slate-100">
+                                  <div className="flex items-center gap-1.5 p-1 bg-slate-100 border border-slate-200 rounded-xl text-xs">
                                     <button
                                       type="button"
                                       onClick={() => setActiveTabs(prev => ({ ...prev, [a.id]: 'visualization' }))}
                                       className={`px-3 py-1 rounded-lg font-medium flex items-center gap-1.5 transition-all ${
                                         currentTab === 'visualization'
-                                          ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30 font-semibold'
-                                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                                          ? 'bg-white text-indigo-700 shadow-sm font-semibold border border-slate-200/80'
+                                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                                       }`}
                                     >
                                       <BarChart3 className="w-3.5 h-3.5" />
@@ -313,27 +313,27 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
                                       onClick={() => setActiveTabs(prev => ({ ...prev, [a.id]: 'table' }))}
                                       className={`px-3 py-1 rounded-lg font-medium flex items-center gap-1.5 transition-all ${
                                         currentTab === 'table'
-                                          ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30 font-semibold'
-                                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                                          ? 'bg-white text-indigo-700 shadow-sm font-semibold border border-slate-200/80'
+                                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
                                       }`}
                                     >
                                       <TableIcon className="w-3.5 h-3.5" />
                                       <span>Data Table & Oversight</span>
                                       <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                                        currentTab === 'table' ? 'bg-indigo-700/90 text-white' : 'bg-slate-800 text-slate-400'
+                                        currentTab === 'table' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-slate-200 text-slate-600'
                                       }`}>
                                         {a.result_table?.length}
                                       </span>
                                     </button>
                                   </div>
 
-                                  <div className="text-[11px] text-slate-400 hidden sm:flex items-center gap-2">
+                                  <div className="text-[11px] text-slate-500 hidden sm:flex items-center gap-2">
                                     {currentTab === 'visualization' ? (
-                                      <span className="flex items-center gap-1 text-indigo-400 font-medium">
+                                      <span className="flex items-center gap-1 text-indigo-600 font-medium">
                                         <Eye className="w-3.5 h-3.5" /> Interactive Chart Mode
                                       </span>
                                     ) : (
-                                      <span className="flex items-center gap-1 text-slate-400 font-medium">
+                                      <span className="flex items-center gap-1 text-slate-500 font-medium">
                                         <Layers className="w-3.5 h-3.5" /> Underlying Records & Export
                                       </span>
                                     )}
@@ -344,7 +344,7 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
                               {/* Visualization View */}
                               {currentTab === 'visualization' && hasChart && (
                                 <div className="space-y-3">
-                                  <div className="p-4 bg-slate-950/60 rounded-xl border border-slate-800 space-y-2">
+                                  <div className="p-4 bg-slate-50/60 rounded-xl border border-slate-200 space-y-2">
                                     <div className="w-full h-72 rounded-lg overflow-hidden">
                                       <Plot
                                         data={a.chart_spec!.spec.data}
@@ -353,7 +353,7 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
                                           autosize: true,
                                           paper_bgcolor: 'rgba(0,0,0,0)',
                                           plot_bgcolor: 'rgba(0,0,0,0)',
-                                          font: { color: '#cbd5e1', family: 'Inter' }
+                                          font: { color: '#334155', family: 'Inter' }
                                         }}
                                         useResizeHandler={true}
                                         style={{ width: '100%', height: '100%' }}
@@ -363,17 +363,17 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
                                   </div>
 
                                   {/* Executive Data Oversight Bar */}
-                                  <div className="px-4 py-2 bg-slate-950/70 border border-slate-800/90 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
-                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-slate-300">
+                                  <div className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-slate-700">
                                       <div className="flex items-center gap-1.5">
-                                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                                        <span className="text-slate-400">Data Oversight:</span>
-                                        <span className="font-semibold text-slate-200">{a.result_table?.length || 0} records analyzed</span>
+                                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                        <span className="text-slate-500">Data Oversight:</span>
+                                        <span className="font-semibold text-slate-800">{a.result_table?.length || 0} records analyzed</span>
                                       </div>
                                       {a.data_oversight?.metric_totals && Object.entries(a.data_oversight.metric_totals).slice(0, 3).map(([metric, total]) => (
                                         <div key={metric} className="flex items-center gap-1">
-                                          <span className="text-slate-400">{metric}:</span>
-                                          <span className="font-semibold text-indigo-300">
+                                          <span className="text-slate-500">{metric}:</span>
+                                          <span className="font-semibold text-indigo-700">
                                             {metric.toLowerCase().includes('profit') || metric.toLowerCase().includes('sales') || metric.toLowerCase().includes('revenue')
                                               ? `$${Number(total).toLocaleString()}`
                                               : Number(total).toLocaleString()}
@@ -386,7 +386,7 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
                                       <button
                                         type="button"
                                         onClick={() => setActiveTabs(prev => ({ ...prev, [a.id]: 'table' }))}
-                                        className="text-[11px] font-medium text-indigo-400 hover:text-indigo-300 flex items-center gap-1 hover:underline group ml-auto"
+                                        className="text-[11px] font-medium text-indigo-600 hover:text-indigo-800 flex items-center gap-1 hover:underline group ml-auto"
                                       >
                                         <span>Inspect Full Table & Exports</span>
                                         <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
@@ -404,7 +404,7 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
                                       <button
                                         type="button"
                                         onClick={() => setActiveTabs(prev => ({ ...prev, [a.id]: 'visualization' }))}
-                                        className="text-[11px] font-medium text-indigo-400 hover:text-indigo-300 flex items-center gap-1 hover:underline"
+                                        className="text-[11px] font-medium text-indigo-600 hover:text-indigo-800 flex items-center gap-1 hover:underline"
                                       >
                                         <BarChart3 className="w-3 h-3" />
                                         <span>Switch back to Visualization</span>
@@ -420,21 +420,21 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
 
                         {/* Executive Insights & Intelligence */}
                         {(a.key_findings || a.data_interpretation || a.strategic_recommendations || a.insights) && (
-                          <div className="p-4 bg-slate-950/80 border border-slate-800/90 rounded-xl space-y-3">
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+                          <div className="p-4 bg-slate-50/70 border border-slate-200 rounded-xl space-y-3">
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 flex items-center gap-1.5">
                               <Sparkles className="w-3.5 h-3.5" />
                               <span>Executive Intelligence</span>
                             </span>
 
                             {a.key_findings && a.key_findings.length > 0 && (
                               <div className="space-y-1.5">
-                                <h4 className="text-xs font-bold text-slate-200">Key Findings:</h4>
+                                <h4 className="text-xs font-bold text-slate-800">Key Findings:</h4>
                                 <ul className="space-y-1 pl-2">
                                   {a.key_findings.map((kf, kIdx) => (
-                                    <li key={kIdx} className="text-xs text-slate-300 flex items-start gap-2">
-                                      <span className="text-indigo-400">•</span>
+                                    <li key={kIdx} className="text-xs text-slate-700 flex items-start gap-2">
+                                      <span className="text-indigo-600">•</span>
                                       <div>
-                                        {kf.title && <strong className="text-slate-100">{kf.title}: </strong>}
+                                        {kf.title && <strong className="text-slate-900">{kf.title}: </strong>}
                                         <span>{kf.description}</span>
                                       </div>
                                     </li>
@@ -445,8 +445,8 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
 
                             {a.data_interpretation && (
                               <div className="space-y-1 pt-1">
-                                <h4 className="text-xs font-bold text-slate-200">Data Interpretation:</h4>
-                                <p className="text-xs text-slate-300 leading-relaxed pl-2">
+                                <h4 className="text-xs font-bold text-slate-800">Data Interpretation:</h4>
+                                <p className="text-xs text-slate-700 leading-relaxed pl-2">
                                   {a.data_interpretation}
                                 </p>
                               </div>
@@ -454,13 +454,13 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
 
                             {a.strategic_recommendations && a.strategic_recommendations.length > 0 && (
                               <div className="space-y-1.5 pt-1">
-                                <h4 className="text-xs font-bold text-slate-200">Strategic Recommendations:</h4>
+                                <h4 className="text-xs font-bold text-slate-800">Strategic Recommendations:</h4>
                                 <ol className="space-y-1 pl-2">
                                   {a.strategic_recommendations.map((rec, rIdx) => (
-                                    <li key={rIdx} className="text-xs text-slate-300 flex items-start gap-2">
-                                      <span className="text-slate-400">{rIdx + 1}.</span>
+                                    <li key={rIdx} className="text-xs text-slate-700 flex items-start gap-2">
+                                      <span className="text-slate-500">{rIdx + 1}.</span>
                                       <div>
-                                        {rec.title && <strong className="text-slate-100">{rec.title}: </strong>}
+                                        {rec.title && <strong className="text-slate-900">{rec.title}: </strong>}
                                         <span>{rec.description}</span>
                                       </div>
                                     </li>
@@ -470,7 +470,7 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
                             )}
 
                             {!a.key_findings && !a.data_interpretation && !a.strategic_recommendations && a.insights && (
-                              <p className="text-xs text-slate-300 leading-relaxed">{a.insights}</p>
+                              <p className="text-xs text-slate-700 leading-relaxed">{a.insights}</p>
                             )}
                           </div>
                         )}
@@ -480,7 +480,7 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
                           {a.plan && (
                             <button
                               onClick={() => setOpenPlanId(openPlanId === a.id ? null : a.id)}
-                              className="text-slate-400 hover:text-slate-200 font-medium flex items-center gap-1"
+                              className="text-slate-500 hover:text-slate-800 font-medium flex items-center gap-1"
                             >
                               <span>Plan ({a.plan.length} steps)</span>
                               {openPlanId === a.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -489,7 +489,7 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
                           {a.generated_code && (
                             <button
                               onClick={() => setOpenCodeId(openCodeId === a.id ? null : a.id)}
-                              className="text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1"
+                              className="text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1"
                             >
                               <Code2 className="w-3.5 h-3.5" />
                               <span>Inspect Code</span>
@@ -499,7 +499,7 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
                         </div>
 
                         {openPlanId === a.id && a.plan && (
-                          <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs text-slate-300 font-mono space-y-1">
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 font-mono space-y-1">
                             {a.plan.map((step, sIdx) => (
                               <div key={sIdx}>{step}</div>
                             ))}
@@ -507,7 +507,7 @@ export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
                         )}
 
                         {openCodeId === a.id && a.generated_code && (
-                          <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs font-mono text-emerald-400 overflow-x-auto">
+                          <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 text-xs font-mono text-emerald-400 overflow-x-auto">
                             <pre>{a.generated_code}</pre>
                           </div>
                         )}

@@ -16,20 +16,15 @@ def insights_node(state: AnalysisState) -> Dict[str, Any]:
     strategic_recommendations = []
     followups = []
 
-    api_key = state.get("gemini_api_key") or settings.GEMINI_API_KEY
-    if api_key:
+    from app.core.llm import call_gemini_llm
+    prompt = INSIGHTS_PROMPT.format(
+        user_query=user_query,
+        result_summary=result_summary
+    )
+    llm_output = call_gemini_llm(prompt, temperature=0.2, custom_api_key=state.get("gemini_api_key"))
+    if llm_output:
         try:
-            llm = ChatGoogleGenerativeAI(
-                model=settings.LLM_MODEL,
-                google_api_key=api_key,
-                temperature=0.2
-            )
-            prompt = INSIGHTS_PROMPT.format(
-                user_query=user_query,
-                result_summary=result_summary
-            )
-            response = llm.invoke(prompt)
-            json_match = re.search(r"\{.*\}", response.content, re.DOTALL)
+            json_match = re.search(r"\{.*\}", llm_output, re.DOTALL)
             if json_match:
                 parsed = json.loads(json_match.group(0))
                 key_findings = parsed.get("key_findings", [])
