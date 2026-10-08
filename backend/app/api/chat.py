@@ -17,6 +17,10 @@ def get_workspace_conversation(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    ws = db.query(Workspace).filter(Workspace.id == workspace_id, Workspace.user_id == current_user.id).first()
+    if not ws:
+        raise HTTPException(status_code=404, detail="Workspace not found or access denied.")
+
     if conversation_id:
         conv = db.query(Conversation).filter(Conversation.id == conversation_id, Conversation.workspace_id == workspace_id).first()
     else:

@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     
     # Gemini / Google LLM key
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", os.getenv("GOOGLE_API_KEY", ""))
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "gemini-2.0-flash")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "gemini-flash-latest")
 
     # SQLite DB
     DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///{os.path.abspath(os.path.join(os.path.dirname(__file__), '../../graph_analytics.db'))}")

@@ -38,6 +38,9 @@ def list_workspace_insights(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    ws = db.query(Workspace).filter(Workspace.id == workspace_id, Workspace.user_id == current_user.id).first()
+    if not ws:
+        raise HTTPException(status_code=404, detail="Workspace not found or access denied.")
     return db.query(SavedInsight).filter(SavedInsight.workspace_id == workspace_id).order_by(SavedInsight.created_at.desc()).all()
 
 @router.delete("/insights/{id}")
@@ -46,9 +49,12 @@ def delete_insight(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    ins = db.query(SavedInsight).filter(SavedInsight.id == id).first()
+    ins = db.query(SavedInsight).join(Workspace, SavedInsight.workspace_id == Workspace.id).filter(
+        SavedInsight.id == id,
+        Workspace.user_id == current_user.id
+    ).first()
     if not ins:
-        raise HTTPException(status_code=404, detail="Saved insight not found.")
+        raise HTTPException(status_code=404, detail="Saved insight not found or access denied.")
     db.delete(ins)
     db.commit()
     return {"status": "success", "message": "Insight deleted."}

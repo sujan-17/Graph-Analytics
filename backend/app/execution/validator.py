@@ -2,12 +2,23 @@ import ast
 
 FORBIDDEN_MODULES = {
     "os", "sys", "subprocess", "socket", "requests", "urllib", "shutil", 
-    "builtins", "__import__", "importlib", "pickle", "ctypes", "pathlib"
+    "builtins", "__import__", "importlib", "pickle", "ctypes", "pathlib",
+    "multiprocessing", "threading", "pty", "tempfile", "sqlite3", "inspect", "posix", "nt"
 }
 
 FORBIDDEN_BUILTINS = {
     "open", "eval", "exec", "__import__", "compile", "globals", "locals",
-    "getattr", "setattr", "delattr", "hasattr", "input"
+    "getattr", "setattr", "delattr", "hasattr", "input", "breakpoint", "memoryview"
+}
+
+FORBIDDEN_PANDAS_METHODS = {
+    "to_csv", "to_excel", "to_json", "to_sql", "to_pickle", "to_parquet", "to_feather", "to_hdf",
+    "to_stata", "to_clipboard", "read_csv", "read_sql", "read_excel", "read_parquet", "read_json",
+    "read_table", "read_pickle", "read_feather", "read_hdf"
+}
+
+FORBIDDEN_ATTRIBUTES = {
+    "__subclasses__", "__bases__", "__mro__", "__globals__", "__builtins__", "__code__"
 }
 
 class CodeValidator(ast.NodeVisitor):
@@ -28,15 +39,18 @@ class CodeValidator(ast.NodeVisitor):
                 self.errors.append(f"Forbidden import from module: '{node.module}'")
         self.generic_visit(node)
 
+    def visit_Attribute(self, node):
+        if node.attr in FORBIDDEN_ATTRIBUTES:
+            self.errors.append(f"Forbidden attribute access: '{node.attr}'")
+        self.generic_visit(node)
+
     def visit_Call(self, node):
         if isinstance(node.func, ast.Name):
             if node.func.id in FORBIDDEN_BUILTINS:
                 self.errors.append(f"Forbidden builtin function call: '{node.func.id}()'")
         elif isinstance(node.func, ast.Attribute):
-            if node.func.attr in {"to_csv", "to_excel", "to_json", "to_sql", "to_pickle", "read_csv", "read_sql"}:
-                # Prevent unauthorized file writing/reading directly in Pandas snippet
-                if node.func.attr.startswith("to_"):
-                    self.errors.append(f"Forbidden file export operation: '{node.func.attr}'")
+            if node.func.attr in FORBIDDEN_PANDAS_METHODS:
+                self.errors.append(f"Forbidden file I/O or export operation: '{node.func.attr}'")
         self.generic_visit(node)
 
 def validate_code_ast(code: str) -> tuple[bool, list[str]]:

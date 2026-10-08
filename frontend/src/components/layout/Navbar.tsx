@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Network, LogOut, User as UserIcon, Plus, FolderKanban, Key } from 'lucide-react';
+import React from 'react';
+import { Network, LogOut, User as UserIcon, Plus, FolderKanban } from 'lucide-react';
 import { User, Workspace } from '../../types';
 
 interface NavbarProps {
@@ -19,39 +19,30 @@ export const Navbar: React.FC<NavbarProps> = ({
   onCreateWorkspace,
   onLogout,
 }) => {
-  const [showKeyModal, setShowKeyModal] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState(localStorage.getItem('gemini_api_key') || '');
-
-  const saveApiKey = () => {
-    localStorage.setItem('gemini_api_key', apiKeyInput);
-    setShowKeyModal(false);
-    alert('Gemini API Key saved in local browser storage!');
-  };
-
   return (
-    <header className="h-16 border-b border-slate-800 bg-slate-900/80 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-40">
+    <header className="h-16 border-b border-slate-200 bg-white/95 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-40 shadow-sm">
       {/* Brand Logo & Name */}
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 p-0.5 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-          <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
-            <Network className="w-5 h-5 text-indigo-400" />
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-500 p-0.5 flex items-center justify-center shadow-md shadow-indigo-500/20">
+          <div className="w-full h-full bg-white rounded-[10px] flex items-center justify-center">
+            <Network className="w-5 h-5 text-indigo-600" />
           </div>
         </div>
         <div>
-          <h1 className="font-extrabold text-base tracking-tight text-white flex items-center gap-2">
-            Graph Analytics <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">LangGraph Multi-Agent</span>
+          <h1 className="font-extrabold text-base tracking-tight text-slate-900 flex items-center gap-2">
+            Graph Analytics <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">LangGraph Multi-Agent</span>
           </h1>
-          <p className="text-xs text-slate-400 hidden sm:block">Stateful AI Conversational Analytics Platform</p>
+          <p className="text-xs text-slate-500 hidden sm:block">Stateful AI Conversational Analytics Platform</p>
         </div>
       </div>
 
       {/* Workspace Switcher & User Profile */}
       <div className="flex items-center gap-4">
         {/* Workspace Dropdown */}
-        <div className="flex items-center gap-2 bg-slate-800/80 rounded-lg p-1 border border-slate-700/60">
-          <FolderKanban className="w-4 h-4 text-indigo-400 ml-2" />
+        <div className="flex items-center gap-2 bg-slate-50 rounded-lg p-1 border border-slate-200">
+          <FolderKanban className="w-4 h-4 text-indigo-600 ml-2" />
           <select
-            className="bg-transparent text-sm font-medium text-slate-200 outline-none pr-2 py-1 cursor-pointer"
+            className="bg-transparent text-sm font-medium text-slate-700 outline-none pr-2 py-1 cursor-pointer"
             value={currentWorkspace?.id || ''}
             onChange={(e) => {
               const selected = workspaces.find((w) => w.id === e.target.value);
@@ -59,82 +50,37 @@ export const Navbar: React.FC<NavbarProps> = ({
             }}
           >
             {workspaces.map((w) => (
-              <option key={w.id} value={w.id} className="bg-slate-900 text-slate-200">
+              <option key={w.id} value={w.id} className="bg-white text-slate-800">
                 {w.name}
               </option>
             ))}
           </select>
           <button
             onClick={onCreateWorkspace}
-            className="p-1 hover:bg-indigo-600/30 text-indigo-400 hover:text-indigo-300 rounded transition-colors"
+            className="p-1 hover:bg-indigo-50 text-indigo-600 hover:text-indigo-700 rounded transition-colors"
             title="Create New Workspace"
           >
             <Plus className="w-4 h-4" />
           </button>
         </div>
 
-        {/* API Key Modal Button */}
-        <button
-          onClick={() => setShowKeyModal(true)}
-          className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
-        >
-          <Key className="w-3.5 h-3.5 text-amber-400" />
-          <span>API Key</span>
-        </button>
-
         {/* User Pill & Logout */}
-        <div className="flex items-center gap-3 pl-2 border-l border-slate-800">
-          <div className="flex items-center gap-2 text-sm text-slate-300">
-            <div className="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700">
-              <UserIcon className="w-4 h-4 text-indigo-400" />
+        <div className="flex items-center gap-3 pl-2 border-l border-slate-200">
+          <div className="flex items-center gap-2 text-sm text-slate-700">
+            <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+              <UserIcon className="w-4 h-4 text-indigo-600" />
             </div>
             <span className="font-medium hidden md:inline">{user?.name || 'User'}</span>
           </div>
           <button
             onClick={onLogout}
-            className="p-2 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 rounded-lg transition-colors"
+            className="p-2 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
             title="Logout"
           >
             <LogOut className="w-4 h-4" />
           </button>
         </div>
       </div>
-
-      {/* API Key Modal */}
-      {showKeyModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center gap-3 text-amber-400">
-              <Key className="w-6 h-6" />
-              <h3 className="text-lg font-bold text-white">Google Gemini API Key</h3>
-            </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              The application uses Gemini API to power LangChain & LangGraph agents. Enter your key below:
-            </p>
-            <input
-              type="password"
-              placeholder="AIzaSy..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 outline-none focus:border-indigo-500 transition-colors"
-              value={apiKeyInput}
-              onChange={(e) => setApiKeyInput(e.target.value)}
-            />
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                onClick={() => setShowKeyModal(false)}
-                className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveApiKey}
-                className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-lg shadow-indigo-600/30"
-              >
-                Save Key
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </header>
   );
 };

@@ -1,108 +1,518 @@
-import React, { useState } from 'react';
-import { History, CheckCircle, AlertTriangle, Code2, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import {
+  History,
+  CheckCircle,
+  AlertTriangle,
+  Code2,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  MessageSquare,
+  ArrowRight,
+  Table as TableIcon,
+  HelpCircle,
+  Bot,
+  User as UserIcon,
+  ArrowUpRight,
+  Search,
+  BarChart3,
+  Eye,
+  Layers
+} from 'lucide-react';
 import { AnalysisResponse } from '../../types';
+import { AnalysisResultTable } from '../chat/AnalysisResultTable';
+import Plot from '../common/Plot';
 
 interface AnalysisHistoryProps {
   analyses: AnalysisResponse[];
+  activeConversationId?: string;
+  onOpenInChat?: (conversationId: string) => void;
 }
 
-export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({ analyses }) => {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+export const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({
+  analyses,
+  activeConversationId,
+  onOpenInChat
+}) => {
+  const [expandedThreadId, setExpandedThreadId] = useState<string | null>(null);
+  const [openCodeId, setOpenCodeId] = useState<string | null>(null);
+  const [openPlanId, setOpenPlanId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTabs, setActiveTabs] = useState<Record<string, 'visualization' | 'table'>>({});
+
+  const getActiveTab = (a: AnalysisResponse): 'visualization' | 'table' => {
+    if (activeTabs[a.id]) {
+      return activeTabs[a.id];
+    }
+    const hasChart = !!(a.chart_spec && a.chart_spec.spec);
+    if (a.presentation_type === 'table' || !hasChart) {
+      return 'table';
+    }
+    return 'visualization';
+  };
+
+  // Group analyses by conversation thread / specific prompt
+  const threads = useMemo(() => {
+    const threadMap: Record<string, AnalysisResponse[]> = {};
+    const sorted = [...analyses].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+
+    for (const a of sorted) {
+      const key = a.conversation_id || a.id;
+      if (!threadMap[key]) {
+        threadMap[key] = [];
+      }
+      threadMap[key].push(a);
+    }
+
+    return Object.entries(threadMap)
+      .map(([convId, threadAnalyses]) => ({
+        conversationId: convId,
+        rootQuestion: threadAnalyses[0].question,
+        createdAt: threadAnalyses[0].created_at,
+        updatedAt: threadAnalyses[threadAnalyses.length - 1].created_at,
+        analyses: threadAnalyses,
+        latestStatus: threadAnalyses[threadAnalyses.length - 1].execution_status,
+      }))
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  }, [analyses]);
+
+  // Default expand active thread or first thread on initial view
+  useEffect(() => {
+    if (threads.length > 0 && expandedThreadId === null) {
+      const targetId = activeConversationId && threads.some(t => t.conversationId === activeConversationId)
+        ? activeConversationId
+        : threads[0].conversationId;
+      setExpandedThreadId(targetId);
+    }
+  }, [threads, activeConversationId]);
+
+  const filteredThreads = useMemo(() => {
+    if (!searchQuery.trim()) return threads;
+    const q = searchQuery.toLowerCase();
+    return threads.filter(
+      (t) =>
+        t.rootQuestion.toLowerCase().includes(q) ||
+        t.analyses.some(
+          (a) =>
+            a.question.toLowerCase().includes(q) ||
+            a.insights?.toLowerCase().includes(q) ||
+            a.intent?.intent?.toLowerCase().includes(q)
+        )
+    );
+  }, [threads, searchQuery]);
 
   return (
     <div className="space-y-6">
-      <div className="p-6 rounded-2xl glass-panel border border-slate-800">
-        <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
-          <History className="w-5 h-5 text-indigo-400" />
-          <span>Analysis History & Explainability Audit Log</span>
-        </h2>
-        <p className="text-xs text-slate-400 mt-1">
-          Complete transparent audit trail of past multi-agent queries, logical plans, generated AST code, and execution logs.
-        </p>
+      {/* Header Banner */}
+      <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+            <History className="w-5 h-5 text-indigo-600" />
+            <span>Analysis History & Prompt Sessions</span>
+          </h2>
+          <p className="text-xs text-slate-500 mt-1">
+            Complete audit trail of past conversational prompts, execution outputs, data tables, and AI insights.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search past prompts..."
+              className="bg-slate-50 border border-slate-300 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:border-indigo-600 w-48 transition-colors"
+            />
+          </div>
+          <span className="text-xs px-3 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 font-medium">
+            {threads.length} {threads.length === 1 ? 'Prompt Session' : 'Prompt Sessions'} ({analyses.length} total queries)
+          </span>
+        </div>
       </div>
 
-      {analyses.length === 0 ? (
-        <div className="p-12 text-center border border-dashed border-slate-800 rounded-2xl text-slate-400">
-          No analysis history found in this workspace yet. Ask a question in the AI Analyst tab!
+      {/* Empty State */}
+      {threads.length === 0 ? (
+        <div className="p-16 text-center border border-dashed border-slate-300 rounded-2xl bg-white text-slate-500 space-y-3 shadow-xs">
+          <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto text-indigo-600">
+            <History className="w-6 h-6" />
+          </div>
+          <p className="text-sm font-medium text-slate-800">No analysis history in this workspace yet.</p>
+          <p className="text-xs text-slate-500">Ask a question in the AI Analyst tab to start your first analysis!</p>
+        </div>
+      ) : filteredThreads.length === 0 ? (
+        <div className="p-12 text-center border border-dashed border-slate-300 rounded-2xl bg-white text-slate-500 space-y-2 shadow-xs">
+          <p className="text-sm text-slate-800">No prompt sessions match "{searchQuery}"</p>
+          <button
+            onClick={() => setSearchQuery('')}
+            className="text-xs text-indigo-600 hover:text-indigo-800 underline"
+          >
+            Clear search filter
+          </button>
         </div>
       ) : (
         <div className="space-y-4">
-          {analyses.map((a) => {
-            const isExpanded = expandedId === a.id;
+          {filteredThreads.map((thread) => {
+            const isExpanded = expandedThreadId === thread.conversationId;
+            const isSuccess = thread.latestStatus === 'SUCCESS';
+            const isActive = activeConversationId === thread.conversationId;
+
             return (
-              <div key={a.id} className="p-5 rounded-2xl glass-card border border-slate-800 space-y-4">
+              <div
+                key={thread.conversationId}
+                className={`rounded-2xl bg-white border transition-all duration-200 overflow-hidden shadow-sm ${
+                  isActive ? 'border-indigo-400 ring-2 ring-indigo-50' : 'border-slate-200'
+                }`}
+              >
+                {/* Specific Prompt Header Row */}
                 <div
-                  onClick={() => setExpandedId(isExpanded ? null : a.id)}
-                  className="flex items-center justify-between cursor-pointer"
+                  onClick={() => setExpandedThreadId(isExpanded ? null : thread.conversationId)}
+                  className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors select-none"
                 >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-3">
-                      <span className="font-bold text-sm text-white">{a.question}</span>
+                  <div className="space-y-1.5 flex-1 pr-4">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <span className="font-bold text-sm text-slate-900 leading-snug">
+                        {thread.rootQuestion}
+                      </span>
+                      {isActive && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse" />
+                          <span>Active in Chat</span>
+                        </span>
+                      )}
                       <span
                         className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          a.execution_status === 'SUCCESS'
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                          isSuccess
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-rose-50 text-rose-700 border border-rose-200'
                         }`}
                       >
-                        {a.execution_status}
+                        {thread.latestStatus}
                       </span>
+                      {thread.analyses.length > 1 && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 flex items-center gap-1">
+                          <MessageSquare className="w-3 h-3" />
+                          <span>{thread.analyses.length} turns in conversation</span>
+                        </span>
+                      )}
                     </div>
-                    <p className="text-[11px] text-slate-400">
-                      Executed: {new Date(a.created_at).toLocaleString()}
+                    <p className="text-[11px] text-slate-500">
+                      Executed: {new Date(thread.createdAt).toLocaleString()}
+                      {thread.analyses.length > 1 && ` (last active: ${new Date(thread.updatedAt).toLocaleTimeString()})`}
                     </p>
                   </div>
 
-                  <button className="text-slate-400 hover:text-white">
-                    {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {onOpenInChat && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenInChat(thread.conversationId);
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs ${
+                          isActive
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-800 border border-indigo-200'
+                        }`}
+                        title="Resume this conversation in the AI Analyst Chat tab"
+                      >
+                        <Bot className="w-3.5 h-3.5" />
+                        <span>{isActive ? 'Continue in Chat' : 'Open in Chat'}</span>
+                        <ArrowUpRight className="w-3.5 h-3.5 opacity-70" />
+                      </button>
+                    )}
+                    <button
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                      title={isExpanded ? 'Collapse prompt details' : 'Expand conversation history'}
+                    >
+                      {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                    </button>
+                  </div>
                 </div>
 
-                {/* Expanded Details */}
+                {/* Expanded Conversation Details Inside This Specific Prompt */}
                 {isExpanded && (
-                  <div className="space-y-4 pt-4 border-t border-slate-800 text-xs">
-                    {/* Intent */}
-                    {a.intent && (
-                      <div className="space-y-1">
-                        <span className="font-bold text-indigo-400">Parsed Query Intent:</span>
-                        <pre className="p-3 bg-slate-950 rounded-xl border border-slate-800 font-mono text-[11px] text-slate-300">
-                          {JSON.stringify(a.intent, null, 2)}
-                        </pre>
-                      </div>
-                    )}
+                  <div className="p-5 pt-3 border-t border-slate-100 bg-slate-50/50 space-y-6">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 pb-1 border-b border-slate-200">
+                      <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Conversation Thread History ({thread.analyses.length} {thread.analyses.length === 1 ? 'Turn' : 'Turns'})</span>
+                    </div>
 
-                    {/* Plan */}
-                    {a.plan && (
-                      <div className="space-y-1">
-                        <span className="font-bold text-indigo-400">Logical Execution Plan:</span>
-                        <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1 font-mono text-[11px] text-slate-300">
-                          {a.plan.map((step, idx) => (
-                            <div key={idx}>{step}</div>
-                          ))}
+                    {thread.analyses.map((a, idx) => (
+                      <div
+                        key={a.id}
+                        className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4 shadow-sm"
+                      >
+                        {/* Turn Header / Question */}
+                        <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                          <div className="flex items-center gap-2.5">
+                            <span className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-xs border border-indigo-200">
+                              {idx + 1}
+                            </span>
+                            <span className="font-bold text-sm text-slate-900">{a.question}</span>
+                          </div>
+                          <span className="text-[11px] text-slate-400 font-mono">
+                            {new Date(a.created_at).toLocaleTimeString()}
+                          </span>
                         </div>
-                      </div>
-                    )}
 
-                    {/* Generated Code */}
-                    {a.generated_code && (
-                      <div className="space-y-1">
-                        <span className="font-bold text-indigo-400 flex items-center gap-1.5">
-                          <Code2 className="w-3.5 h-3.5" />
-                          <span>Generated Pandas Code:</span>
-                        </span>
-                        <pre className="p-3 bg-slate-950 rounded-xl border border-slate-800 font-mono text-[11px] text-emerald-400 overflow-x-auto">
-                          {a.generated_code}
-                        </pre>
-                      </div>
-                    )}
+                        {/* Intent Badges */}
+                        {a.intent && (
+                          <div className="flex flex-wrap items-center gap-2 text-[10px]">
+                            <span className="font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                              Intent: {a.intent.intent}
+                            </span>
+                            {a.intent.group_by && a.intent.group_by.length > 0 && (
+                              <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 font-medium">
+                                By: {a.intent.group_by.join(', ')}
+                              </span>
+                            )}
+                            {a.intent.metrics && a.intent.metrics.length > 0 && (
+                              <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 font-medium">
+                                Metrics: {a.intent.metrics.join(', ')}
+                              </span>
+                            )}
+                            {a.intent.filters && Object.keys(a.intent.filters).length > 0 && (
+                              <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-medium">
+                                Filters: {Object.entries(a.intent.filters).map(([k, v]) => `${k}=${v}`).join(', ')}
+                              </span>
+                            )}
+                          </div>
+                        )}
 
-                    {/* Insights Summary */}
-                    {a.insights && (
-                      <div className="p-3 bg-indigo-950/40 border border-indigo-500/20 rounded-xl text-slate-200">
-                        <span className="font-bold text-indigo-300 block mb-1">Synthesized Insight:</span>
-                        <p>{a.insights}</p>
+                        {/* Presentation Layer: Visualization vs Data Table & Oversight */}
+                        {(() => {
+                          const hasChart = !!(a.chart_spec && a.chart_spec.spec);
+                          const hasTable = !!(a.result_table && a.result_table.length > 0);
+                          if (!hasChart && !hasTable) return null;
+
+                          const currentTab = getActiveTab(a);
+
+                          return (
+                            <div className="space-y-3 pt-1">
+                              {/* View Switcher Header */}
+                              {hasChart && hasTable && (
+                                <div className="flex items-center justify-between pb-1 border-b border-slate-100">
+                                  <div className="flex items-center gap-1.5 p-1 bg-slate-100 border border-slate-200 rounded-xl text-xs">
+                                    <button
+                                      type="button"
+                                      onClick={() => setActiveTabs(prev => ({ ...prev, [a.id]: 'visualization' }))}
+                                      className={`px-3 py-1 rounded-lg font-medium flex items-center gap-1.5 transition-all ${
+                                        currentTab === 'visualization'
+                                          ? 'bg-white text-indigo-700 shadow-sm font-semibold border border-slate-200/80'
+                                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                                      }`}
+                                    >
+                                      <BarChart3 className="w-3.5 h-3.5" />
+                                      <span>Visualization</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setActiveTabs(prev => ({ ...prev, [a.id]: 'table' }))}
+                                      className={`px-3 py-1 rounded-lg font-medium flex items-center gap-1.5 transition-all ${
+                                        currentTab === 'table'
+                                          ? 'bg-white text-indigo-700 shadow-sm font-semibold border border-slate-200/80'
+                                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                                      }`}
+                                    >
+                                      <TableIcon className="w-3.5 h-3.5" />
+                                      <span>Data Table & Oversight</span>
+                                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                                        currentTab === 'table' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-slate-200 text-slate-600'
+                                      }`}>
+                                        {a.result_table?.length}
+                                      </span>
+                                    </button>
+                                  </div>
+
+                                  <div className="text-[11px] text-slate-500 hidden sm:flex items-center gap-2">
+                                    {currentTab === 'visualization' ? (
+                                      <span className="flex items-center gap-1 text-indigo-600 font-medium">
+                                        <Eye className="w-3.5 h-3.5" /> Interactive Chart Mode
+                                      </span>
+                                    ) : (
+                                      <span className="flex items-center gap-1 text-slate-500 font-medium">
+                                        <Layers className="w-3.5 h-3.5" /> Underlying Records & Export
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Visualization View */}
+                              {currentTab === 'visualization' && hasChart && (
+                                <div className="space-y-3">
+                                  <div className="p-4 bg-slate-50/60 rounded-xl border border-slate-200 space-y-2">
+                                    <div className="w-full h-72 rounded-lg overflow-hidden">
+                                      <Plot
+                                        data={a.chart_spec!.spec.data}
+                                        layout={{
+                                          ...a.chart_spec!.spec.layout,
+                                          autosize: true,
+                                          paper_bgcolor: 'rgba(0,0,0,0)',
+                                          plot_bgcolor: 'rgba(0,0,0,0)',
+                                          font: { color: '#334155', family: 'Inter' }
+                                        }}
+                                        useResizeHandler={true}
+                                        style={{ width: '100%', height: '100%' }}
+                                        config={{ responsive: true, displayModeBar: false }}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  {/* Executive Data Oversight Bar */}
+                                  <div className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-slate-700">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                        <span className="text-slate-500">Data Oversight:</span>
+                                        <span className="font-semibold text-slate-800">{a.result_table?.length || 0} records analyzed</span>
+                                      </div>
+                                      {a.data_oversight?.metric_totals && Object.entries(a.data_oversight.metric_totals).slice(0, 3).map(([metric, total]) => (
+                                        <div key={metric} className="flex items-center gap-1">
+                                          <span className="text-slate-500">{metric}:</span>
+                                          <span className="font-semibold text-indigo-700">
+                                            {metric.toLowerCase().includes('profit') || metric.toLowerCase().includes('sales') || metric.toLowerCase().includes('revenue')
+                                              ? `$${Number(total).toLocaleString()}`
+                                              : Number(total).toLocaleString()}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+
+                                    {hasTable && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveTabs(prev => ({ ...prev, [a.id]: 'table' }))}
+                                        className="text-[11px] font-medium text-indigo-600 hover:text-indigo-800 flex items-center gap-1 hover:underline group ml-auto"
+                                      >
+                                        <span>Inspect Full Table & Exports</span>
+                                        <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Data Table View */}
+                              {(currentTab === 'table' || !hasChart) && hasTable && (
+                                <div className="space-y-2">
+                                  {hasChart && (
+                                    <div className="flex justify-end">
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveTabs(prev => ({ ...prev, [a.id]: 'visualization' }))}
+                                        className="text-[11px] font-medium text-indigo-600 hover:text-indigo-800 flex items-center gap-1 hover:underline"
+                                      >
+                                        <BarChart3 className="w-3 h-3" />
+                                        <span>Switch back to Visualization</span>
+                                      </button>
+                                    </div>
+                                  )}
+                                  <AnalysisResultTable data={a.result_table!} analysisId={a.id} />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+
+                        {/* Executive Insights & Intelligence */}
+                        {(a.key_findings || a.data_interpretation || a.strategic_recommendations || a.insights) && (
+                          <div className="p-4 bg-slate-50/70 border border-slate-200 rounded-xl space-y-3">
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5" />
+                              <span>Executive Intelligence</span>
+                            </span>
+
+                            {a.key_findings && a.key_findings.length > 0 && (
+                              <div className="space-y-1.5">
+                                <h4 className="text-xs font-bold text-slate-800">Key Findings:</h4>
+                                <ul className="space-y-1 pl-2">
+                                  {a.key_findings.map((kf, kIdx) => (
+                                    <li key={kIdx} className="text-xs text-slate-700 flex items-start gap-2">
+                                      <span className="text-indigo-600">•</span>
+                                      <div>
+                                        {kf.title && <strong className="text-slate-900">{kf.title}: </strong>}
+                                        <span>{kf.description}</span>
+                                      </div>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {a.data_interpretation && (
+                              <div className="space-y-1 pt-1">
+                                <h4 className="text-xs font-bold text-slate-800">Data Interpretation:</h4>
+                                <p className="text-xs text-slate-700 leading-relaxed pl-2">
+                                  {a.data_interpretation}
+                                </p>
+                              </div>
+                            )}
+
+                            {a.strategic_recommendations && a.strategic_recommendations.length > 0 && (
+                              <div className="space-y-1.5 pt-1">
+                                <h4 className="text-xs font-bold text-slate-800">Strategic Recommendations:</h4>
+                                <ol className="space-y-1 pl-2">
+                                  {a.strategic_recommendations.map((rec, rIdx) => (
+                                    <li key={rIdx} className="text-xs text-slate-700 flex items-start gap-2">
+                                      <span className="text-slate-500">{rIdx + 1}.</span>
+                                      <div>
+                                        {rec.title && <strong className="text-slate-900">{rec.title}: </strong>}
+                                        <span>{rec.description}</span>
+                                      </div>
+                                    </li>
+                                  ))}
+                                </ol>
+                              </div>
+                            )}
+
+                            {!a.key_findings && !a.data_interpretation && !a.strategic_recommendations && a.insights && (
+                              <p className="text-xs text-slate-700 leading-relaxed">{a.insights}</p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Accordions: Plan & Inspect Code */}
+                        <div className="flex items-center gap-4 text-xs pt-1">
+                          {a.plan && (
+                            <button
+                              onClick={() => setOpenPlanId(openPlanId === a.id ? null : a.id)}
+                              className="text-slate-500 hover:text-slate-800 font-medium flex items-center gap-1"
+                            >
+                              <span>Plan ({a.plan.length} steps)</span>
+                              {openPlanId === a.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
+                          {a.generated_code && (
+                            <button
+                              onClick={() => setOpenCodeId(openCodeId === a.id ? null : a.id)}
+                              className="text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1"
+                            >
+                              <Code2 className="w-3.5 h-3.5" />
+                              <span>Inspect Code</span>
+                              {openCodeId === a.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
+                        </div>
+
+                        {openPlanId === a.id && a.plan && (
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 font-mono space-y-1">
+                            {a.plan.map((step, sIdx) => (
+                              <div key={sIdx}>{step}</div>
+                            ))}
+                          </div>
+                        )}
+
+                        {openCodeId === a.id && a.generated_code && (
+                          <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 text-xs font-mono text-emerald-400 overflow-x-auto">
+                            <pre>{a.generated_code}</pre>
+                          </div>
+                        )}
                       </div>
-                    )}
+                    ))}
                   </div>
                 )}
               </div>

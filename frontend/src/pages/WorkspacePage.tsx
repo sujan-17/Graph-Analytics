@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { User, Workspace, Dataset, DatasetProfile, AnalysisResponse, SavedInsight, Report } from '../types';
 import { Navbar } from '../components/layout/Navbar';
 import { Sidebar, TabType } from '../components/layout/Sidebar';
@@ -36,6 +36,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
   const [savedInsights, setSavedInsights] = useState<SavedInsight[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [initialQuestion, setInitialQuestion] = useState<string | undefined>(undefined);
+  const [activeConversationId, setActiveConversationId] = useState<string | undefined>(undefined);
 
   // Load workspace data
   useEffect(() => {
@@ -48,7 +49,12 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
       setDatasets(dsList);
 
       if (dsList.length > 0) {
-        const activeDs = dsList[0];
+        // Keep active dataset if still present, or prefer combined dataset, or first
+        const combinedDs = dsList.find((d) => d.filename.startsWith('Combined_'));
+        const activeDs =
+          (selectedDataset && dsList.find((d) => d.id === selectedDataset.id)) ||
+          combinedDs ||
+          dsList[0];
         setSelectedDataset(activeDs);
         await loadDatasetProfileAndPreview(activeDs.id);
       } else {
@@ -59,6 +65,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
 
       const anList = await analysisService.listAnalyses(currentWorkspace.id);
       setAnalyses(anList);
+      // Previous conversations reside in Analysis History. Active chat starts fresh unless explicitly opened.
 
       const insList = await analysisService.listSavedInsights(currentWorkspace.id);
       setSavedInsights(insList);
@@ -93,13 +100,44 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
     await loadDatasetProfileAndPreview(ds.id);
   };
 
+  const handleCombineDatasets = async (params?: { dataset_ids?: string[]; combined_name?: string; merge_strategy?: string }) => {
+    try {
+      const combined = await workspaceService.combineDatasets(currentWorkspace.id, params);
+      await loadWorkspaceData();
+      setSelectedDataset(combined);
+      await loadDatasetProfileAndPreview(combined.id);
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.message || 'Failed to combine datasets.';
+      alert(msg);
+      throw err;
+    }
+  };
+
+  const handleDeleteDataset = async (datasetId: string) => {
+    try {
+      await workspaceService.deleteDataset(datasetId);
+      await loadWorkspaceData();
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.message || 'Failed to delete dataset.';
+      alert(msg);
+    }
+  };
+
   const handleSendQuestion = async (question: string) => {
     const response = await analysisService.runAnalysis(
       currentWorkspace.id,
       question,
-      selectedDataset?.id
+      selectedDataset?.id,
+      activeConversationId
     );
+    if (response.conversation_id) {
+      setActiveConversationId(response.conversation_id);
+    }
     setAnalyses((prev) => [...prev, response]);
+  };
+
+  const handleNewSession = () => {
+    setActiveConversationId(undefined);
   };
 
   const handleSaveInsight = async (content: string, analysisId?: string) => {
@@ -120,13 +158,37 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
     setReports(repList);
   };
 
+  // Filter analyses for the active conversational session in chat
+  const currentSessionAnalyses = useMemo(() => {
+    if (!activeConversationId) return [];
+    return analyses.filter((a) => a.conversation_id === activeConversationId);
+  }, [analyses, activeConversationId]);
+
+  // Count distinct past prompt sessions
+  const totalPastSessions = useMemo(() => {
+    const sessionIds = new Set<string>();
+    for (const a of analyses) {
+      const key = a.conversation_id || a.id;
+      if (key) sessionIds.add(key);
+    }
+    return sessionIds.size;
+  }, [analyses]);
+
+  const handleOpenConversationInChat = (conversationId: string) => {
+    setActiveConversationId(conversationId);
+    setActiveTab('analyst');
+  };
+
   const handleNavigateToAnalyst = (question?: string) => {
-    if (question) setInitialQuestion(question);
+    if (question) {
+      setInitialQuestion(question);
+      setActiveConversationId(undefined); // Start fresh session for the new prompt
+    }
     setActiveTab('analyst');
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col">
+    <div className="min-h-screen bg-slate-50 flex flex-col">
       <Navbar
         user={user}
         workspaces={workspaces}
@@ -150,6 +212,9 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
               profile={profile}
               onNavigateToAnalyst={handleNavigateToAnalyst}
               onNavigateToUpload={() => setActiveTab('datasets')}
+              datasets={datasets}
+              selectedDataset={selectedDataset}
+              onSelectDataset={handleSelectDataset}
             />
           )}
 
@@ -161,20 +226,37 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
               previewData={previewData}
               onSelectDataset={handleSelectDataset}
               onUploadCSV={handleUploadCSV}
+              onCombineDatasets={handleCombineDatasets}
+              onDeleteDataset={handleDeleteDataset}
+              onNavigateToAnalyst={() => setActiveTab('analyst')}
             />
           )}
 
           {activeTab === 'analyst' && (
             <AIAnalystChat
-              analyses={analyses}
+              analyses={currentSessionAnalyses}
               profile={profile}
               initialQuestion={initialQuestion}
               onSendQuestion={handleSendQuestion}
               onSaveInsight={handleSaveInsight}
+              onNewSession={handleNewSession}
+              activeConversationId={activeConversationId}
+              totalPastSessions={totalPastSessions}
+              onNavigateToHistory={() => setActiveTab('history')}
+              datasets={datasets}
+              selectedDataset={selectedDataset}
+              onSelectDataset={handleSelectDataset}
+              onCombineDatasets={handleCombineDatasets}
             />
           )}
 
-          {activeTab === 'history' && <AnalysisHistory analyses={analyses} />}
+          {activeTab === 'history' && (
+            <AnalysisHistory
+              analyses={analyses}
+              activeConversationId={activeConversationId}
+              onOpenInChat={handleOpenConversationInChat}
+            />
+          )}
 
           {activeTab === 'reports' && (
             <ReportsManager

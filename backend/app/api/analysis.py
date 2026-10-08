@@ -1,8 +1,10 @@
 import json
+from datetime import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User
 from app.models.workspace import Workspace
@@ -14,6 +16,35 @@ from app.api.auth import get_current_user
 from app.graph.graph import analysis_graph
 
 router = APIRouter(tags=["analysis"])
+
+def compute_data_oversight(result_table: Optional[List[dict]], query_intent: Optional[dict]) -> dict:
+    if not result_table:
+        return {"total_records": 0, "metric_totals": {}, "dimensions": [], "filters": {}}
+    
+    total_records = len(result_table)
+    sample = result_table[0] if result_table else {}
+    cols = list(sample.keys())
+    
+    metric_totals = {}
+    dimensions = []
+    for c in cols:
+        c_lower = c.lower()
+        if c_lower in ["index", "level_0"]:
+            continue
+        is_id = c_lower.endswith("id") or c_lower == "id" or "uuid" in c_lower or "_id" in c_lower
+        vals = [r.get(c) for r in result_table if r.get(c) is not None]
+        if not is_id and vals and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in vals[:25]):
+            total_val = sum(float(v) for v in vals)
+            metric_totals[c] = round(total_val, 2)
+        elif not is_id:
+            dimensions.append(c)
+
+    return {
+        "total_records": total_records,
+        "metric_totals": metric_totals,
+        "dimensions": dimensions[:3],
+        "filters": (query_intent or {}).get("filters", {})
+    }
 
 @router.post("/workspaces/{workspace_id}/analysis", response_model=AnalysisResponse)
 def run_conversational_analysis(
@@ -28,6 +59,16 @@ def run_conversational_analysis(
 
     # Select active dataset
     dataset_id = req.dataset_id
+    if dataset_id in ["combined", "all"]:
+        comb_ds = db.query(Dataset).filter(
+            Dataset.workspace_id == workspace_id,
+            Dataset.filename.like("Combined_%")
+        ).order_by(Dataset.created_at.desc()).first()
+        if comb_ds:
+            dataset_id = comb_ds.id
+        else:
+            dataset_id = None
+
     if not dataset_id:
         latest_ds = db.query(Dataset).filter(Dataset.workspace_id == workspace_id).order_by(Dataset.created_at.desc()).first()
         if not latest_ds:
@@ -41,23 +82,29 @@ def run_conversational_analysis(
     profile_rec = db.query(DatasetProfile).filter(DatasetProfile.dataset_id == dataset_id).first()
     profile_dict = json.loads(profile_rec.profile_json) if profile_rec else {}
 
-    # Get conversation history if conversation_id provided or create conversation
+    # Resolve active conversation or create a new conversation session for a new prompt
     conv_id = req.conversation_id
-    if not conv_id:
-        new_conv = Conversation(workspace_id=workspace_id)
-        db.add(new_conv)
+    conv = None
+    if conv_id:
+        conv = db.query(Conversation).filter(Conversation.id == conv_id, Conversation.workspace_id == workspace_id).first()
+
+    if not conv:
+        # Starting a new prompt session: create a new conversation thread for this specific prompt
+        conv = Conversation(workspace_id=workspace_id)
+        db.add(conv)
         db.commit()
-        db.refresh(new_conv)
-        conv_id = new_conv.id
+        db.refresh(conv)
+        conv_id = conv.id
 
-    # Record user message in DB
-    user_msg = Message(conversation_id=conv_id, role="user", content=req.question)
-    db.add(user_msg)
-    db.commit()
-
-    # Load history messages
+    # Load prior conversation history messages before logging current user question
     prev_messages = db.query(Message).filter(Message.conversation_id == conv_id).order_by(Message.created_at.asc()).all()
     history_list = [{"role": m.role, "content": m.content} for m in prev_messages]
+
+    # Record current user message in DB
+    user_msg = Message(conversation_id=conv_id, role="user", content=req.question)
+    db.add(user_msg)
+    conv.updated_at = datetime.utcnow()
+    db.commit()
 
     # Initialize LangGraph AnalysisState
     initial_state = {
@@ -68,6 +115,9 @@ def run_conversational_analysis(
         "dataset_profile": profile_dict,
         "user_query": req.question,
         "conversation_history": history_list,
+        "gemini_api_key": settings.GEMINI_API_KEY,
+        "dataset_profile_summary": None,
+        "conversation_history_summary": None,
         "query_intent": None,
         "needs_clarification": False,
         "clarification_message": None,
@@ -90,8 +140,13 @@ def run_conversational_analysis(
     # Execute LangGraph Multi-Agent Workflow
     final_state = analysis_graph.invoke(initial_state)
 
-    exec_status = final_state.get("final_status", "SUCCESS")
     err_msg = final_state.get("execution_error")
+    if final_state.get("needs_clarification", False):
+        exec_status = "CLARIFICATION_NEEDED"
+    elif err_msg or not final_state.get("validation_result", False):
+        exec_status = "FAILED"
+    else:
+        exec_status = "SUCCESS"
 
     # Save Analysis run in DB
     new_analysis = Analysis(
@@ -112,7 +167,10 @@ def run_conversational_analysis(
     res_insights_dict = {
         "insights": final_state.get("insights"),
         "recommendations": final_state.get("recommendations"),
-        "follow_up_questions": final_state.get("follow_up_questions")
+        "follow_up_questions": final_state.get("follow_up_questions"),
+        "key_findings": final_state.get("key_findings"),
+        "data_interpretation": final_state.get("data_interpretation"),
+        "strategic_recommendations": final_state.get("strategic_recommendations")
     }
 
     new_result = AnalysisResult(
@@ -124,10 +182,23 @@ def run_conversational_analysis(
     db.add(new_result)
 
     # Record Assistant message response in conversation
-    ai_content = final_state.get("insights") or final_state.get("clarification_message") or err_msg or "Analysis executed."
+    ai_content = final_state.get("data_interpretation") or final_state.get("insights") or final_state.get("clarification_message") or err_msg or "Analysis executed."
     assistant_msg = Message(conversation_id=conv_id, role="assistant", content=ai_content)
     db.add(assistant_msg)
+    if conv:
+        conv.updated_at = datetime.utcnow()
     db.commit()
+
+    oversight = compute_data_oversight(final_state.get("result_table"), final_state.get("query_intent"))
+    intent_data = final_state.get("query_intent") or {}
+    pres_type = intent_data.get("presentation_type")
+    if not pres_type:
+        if intent_data.get("intent") in ["filtering", "lookup", "detail"] and not intent_data.get("group_by"):
+            pres_type = "table"
+        elif final_state.get("chart_config"):
+            pres_type = "visualization"
+        else:
+            pres_type = "table" if not final_state.get("chart_config") else "visualization"
 
     return {
         "id": new_analysis.id,
@@ -145,9 +216,14 @@ def run_conversational_analysis(
         "clarification_options": final_state.get("clarification_options"),
         "result_table": final_state.get("result_table"),
         "chart_spec": final_state.get("chart_config"),
+        "presentation_type": pres_type,
+        "data_oversight": oversight,
         "insights": final_state.get("insights"),
         "recommendations": final_state.get("recommendations"),
         "follow_up_questions": final_state.get("follow_up_questions"),
+        "key_findings": final_state.get("key_findings"),
+        "data_interpretation": final_state.get("data_interpretation"),
+        "strategic_recommendations": final_state.get("strategic_recommendations"),
         "created_at": new_analysis.created_at
     }
 
@@ -157,13 +233,22 @@ def list_workspace_analyses(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    analyses = db.query(Analysis).filter(Analysis.workspace_id == workspace_id).order_by(Analysis.created_at.desc()).all()
+    ws = db.query(Workspace).filter(Workspace.id == workspace_id, Workspace.user_id == current_user.id).first()
+    if not ws:
+        raise HTTPException(status_code=404, detail="Workspace not found or access denied.")
+    analyses = db.query(Analysis).filter(Analysis.workspace_id == workspace_id).order_by(Analysis.created_at.asc()).all()
     res_list = []
     for a in analyses:
         r = a.result
         res_table = json.loads(r.result_json) if r and r.result_json else None
         chart_spec = json.loads(r.chart_json) if r and r.chart_json else None
         ins_dict = json.loads(r.insights) if r and r.insights else {}
+        intent_obj = json.loads(a.intent_json) if a.intent_json else {}
+
+        item_oversight = compute_data_oversight(res_table, intent_obj)
+        pres_type = intent_obj.get("presentation_type") if isinstance(intent_obj, dict) else None
+        if not pres_type:
+            pres_type = "visualization" if chart_spec else "table"
 
         res_list.append({
             "id": a.id,
@@ -171,19 +256,24 @@ def list_workspace_analyses(
             "dataset_id": a.dataset_id,
             "conversation_id": a.conversation_id,
             "question": a.question,
-            "intent": json.loads(a.intent_json) if a.intent_json else None,
+            "intent": intent_obj if intent_obj else None,
             "plan": json.loads(a.plan_json) if a.plan_json else None,
             "generated_code": a.generated_code,
             "execution_status": a.execution_status,
             "error_message": a.error_message,
-            "needs_clarification": False,
-            "clarification_message": None,
-            "clarification_options": None,
+            "needs_clarification": intent_obj.get("needs_clarification", False) if isinstance(intent_obj, dict) else False,
+            "clarification_message": intent_obj.get("clarification_message") if isinstance(intent_obj, dict) else None,
+            "clarification_options": intent_obj.get("clarification_options") if isinstance(intent_obj, dict) else None,
             "result_table": res_table,
             "chart_spec": chart_spec,
+            "presentation_type": pres_type,
+            "data_oversight": item_oversight,
             "insights": ins_dict.get("insights"),
             "recommendations": ins_dict.get("recommendations"),
             "follow_up_questions": ins_dict.get("follow_up_questions"),
+            "key_findings": ins_dict.get("key_findings"),
+            "data_interpretation": ins_dict.get("data_interpretation"),
+            "strategic_recommendations": ins_dict.get("strategic_recommendations"),
             "created_at": a.created_at
         })
     return res_list
@@ -194,13 +284,17 @@ def get_analysis_detail(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    a = db.query(Analysis).filter(Analysis.id == id).first()
+    a = db.query(Analysis).join(Workspace, Analysis.workspace_id == Workspace.id).filter(
+        Analysis.id == id,
+        Workspace.user_id == current_user.id
+    ).first()
     if not a:
-        raise HTTPException(status_code=404, detail="Analysis run not found.")
+        raise HTTPException(status_code=404, detail="Analysis run not found or access denied.")
     r = a.result
     res_table = json.loads(r.result_json) if r and r.result_json else None
     chart_spec = json.loads(r.chart_json) if r and r.chart_json else None
     ins_dict = json.loads(r.insights) if r and r.insights else {}
+    intent_obj = json.loads(a.intent_json) if a.intent_json else {}
 
     return {
         "id": a.id,
@@ -208,18 +302,21 @@ def get_analysis_detail(
         "dataset_id": a.dataset_id,
         "conversation_id": a.conversation_id,
         "question": a.question,
-        "intent": json.loads(a.intent_json) if a.intent_json else None,
+        "intent": intent_obj if intent_obj else None,
         "plan": json.loads(a.plan_json) if a.plan_json else None,
         "generated_code": a.generated_code,
         "execution_status": a.execution_status,
         "error_message": a.error_message,
-        "needs_clarification": False,
-        "clarification_message": None,
-        "clarification_options": None,
+        "needs_clarification": intent_obj.get("needs_clarification", False) if isinstance(intent_obj, dict) else False,
+        "clarification_message": intent_obj.get("clarification_message") if isinstance(intent_obj, dict) else None,
+        "clarification_options": intent_obj.get("clarification_options") if isinstance(intent_obj, dict) else None,
         "result_table": res_table,
         "chart_spec": chart_spec,
         "insights": ins_dict.get("insights"),
         "recommendations": ins_dict.get("recommendations"),
         "follow_up_questions": ins_dict.get("follow_up_questions"),
+        "key_findings": ins_dict.get("key_findings"),
+        "data_interpretation": ins_dict.get("data_interpretation"),
+        "strategic_recommendations": ins_dict.get("strategic_recommendations"),
         "created_at": a.created_at
     }

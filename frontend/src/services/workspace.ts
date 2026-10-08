@@ -47,5 +47,14 @@ export const workspaceService = {
 
   async deleteDataset(datasetId: string): Promise<void> {
     await API.delete(`/datasets/${datasetId}`);
+  },
+
+  async combineDatasets(
+    workspaceId: string,
+    params?: { dataset_ids?: string[]; combined_name?: string; merge_strategy?: string }
+  ): Promise<Dataset> {
+    const res = await API.post(`/workspaces/${workspaceId}/datasets/combine`, params || {});
+    return res.data;
   }
 };
+

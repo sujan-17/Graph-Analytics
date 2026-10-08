@@ -1,4 +1,5 @@
 import os
+import re
 import pandas as pd
 import numpy as np
 from typing import Dict, Any, List
@@ -57,9 +58,11 @@ class ProfilingService:
 
             # Check if date/time
             is_date = False
-            if "date" in col.lower() or "time" in col.lower() or pd.api.types.is_datetime64_any_dtype(series):
+            is_date_name = bool(re.search(r"(^|[_\s])(date|time|timestamp|datetime)($|[_\s])", str(col), re.IGNORECASE))
+            if is_date_name or pd.api.types.is_datetime64_any_dtype(series):
                 try:
-                    dt_series = pd.to_datetime(series.dropna())
+                    dt_series = pd.to_datetime(series.dropna(), errors='coerce')
+                    dt_series = dt_series.dropna()
                     if len(dt_series) > 0:
                         date_cols.append(col)
                         is_date = True

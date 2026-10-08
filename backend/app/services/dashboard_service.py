@@ -80,7 +80,7 @@ class DashboardService:
                                 "title": f"Monthly {metric_col}",
                                 "xaxis": {"title": date_col},
                                 "yaxis": {"title": metric_col},
-                                "template": "plotly_dark",
+                                "template": "plotly_white",
                                 "margin": {"l": 40, "r": 40, "t": 40, "b": 40}
                             }
                         }
@@ -112,7 +112,7 @@ class DashboardService:
                             "title": f"Top {cat_col} by {metric_col}",
                             "xaxis": {"title": cat_col},
                             "yaxis": {"title": metric_col},
-                            "template": "plotly_dark",
+                            "template": "plotly_white",
                             "margin": {"l": 40, "r": 40, "t": 40, "b": 40}
                         }
                     }

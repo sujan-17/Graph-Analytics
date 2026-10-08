@@ -1,7 +1,8 @@
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any
+from xml.sax.saxutils import escape as xml_escape
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -85,8 +86,8 @@ class ReportService:
         elements = []
 
         # Title Header
-        elements.append(Paragraph(f"Executive Analytics Report: {report_name}", title_style))
-        elements.append(Paragraph(f"Workspace: <b>{workspace_name}</b> | Generated on: {datetime.utcnow().strftime('%B %d, %Y')}", subtitle_style))
+        elements.append(Paragraph(f"Executive Analytics Report: {xml_escape(report_name)}", title_style))
+        elements.append(Paragraph(f"Workspace: <b>{xml_escape(workspace_name)}</b> | Generated on: {datetime.now(timezone.utc).strftime('%B %d, %Y')}", subtitle_style))
         elements.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#6366f1'), spaceAfter=15))
 
         # 1. Executive Summary
@@ -126,7 +127,7 @@ class ReportService:
         if saved_insights:
             for idx, ins in enumerate(saved_insights, 1):
                 content = ins.get("content", "")
-                elements.append(Paragraph(f"• <b>Insight #{idx}:</b> {content}", bullet_style))
+                elements.append(Paragraph(f"• <b>Insight #{idx}:</b> {xml_escape(content)}", bullet_style))
         else:
             elements.append(Paragraph("No explicit saved insights attached to this report.", body_style))
 
@@ -138,9 +139,10 @@ class ReportService:
             for idx, a in enumerate(analyses, 1):
                 q = a.get("question", "")
                 res_sum = a.get("insights", "")
-                elements.append(Paragraph(f"<b>Query #{idx}: {q}</b>", ParagraphStyle('QStyle', parent=body_style, fontName='Helvetica-Bold', textColor=colors.HexColor('#1e1b4b'))))
+                q_escaped = xml_escape(q)
+                elements.append(Paragraph(f"<b>Query #{idx}: {q_escaped}</b>", ParagraphStyle('QStyle', parent=body_style, fontName='Helvetica-Bold', textColor=colors.HexColor('#1e1b4b'))))
                 if res_sum:
-                    elements.append(Paragraph(f"{res_sum}", body_style))
+                    elements.append(Paragraph(f"{xml_escape(res_sum)}", body_style))
                 elements.append(Spacer(1, 5))
         else:
             elements.append(Paragraph("No analysis history items attached.", body_style))

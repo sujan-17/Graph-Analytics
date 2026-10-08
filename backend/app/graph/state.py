@@ -8,6 +8,9 @@ class AnalysisState(TypedDict):
     dataset_profile: Dict[str, Any]
     user_query: str
     conversation_history: List[Dict[str, Any]]
+    gemini_api_key: Optional[str]
+    dataset_profile_summary: Optional[str]
+    conversation_history_summary: Optional[str]
     
     # Node outputs
     query_intent: Optional[Dict[str, Any]]
@@ -32,5 +35,8 @@ class AnalysisState(TypedDict):
     insights: Optional[str]
     recommendations: Optional[List[str]]
     follow_up_questions: Optional[List[str]]
+    key_findings: Optional[List[Dict[str, str]]]
+    data_interpretation: Optional[str]
+    strategic_recommendations: Optional[List[Dict[str, str]]]
     
     final_status: str  # SUCCESS, FAILED, CLARIFICATION_NEEDED
