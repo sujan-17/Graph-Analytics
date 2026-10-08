@@ -1,13 +1,16 @@
 import React from 'react';
 import Plot from '../common/Plot';
-import { TrendingUp, Award, BarChart3, ArrowRight, ShieldCheck, Sparkles, MessageSquare } from 'lucide-react';
-import { DatasetProfile } from '../../types';
+import { TrendingUp, Award, BarChart3, ArrowRight, ShieldCheck, Sparkles, MessageSquare, Layers } from 'lucide-react';
+import { DatasetProfile, Dataset } from '../../types';
 
 interface OverviewDashboardProps {
   workspaceName: string;
   profile: DatasetProfile | null;
   onNavigateToAnalyst: (question?: string) => void;
   onNavigateToUpload: () => void;
+  datasets?: Dataset[];
+  selectedDataset?: Dataset | null;
+  onSelectDataset?: (ds: Dataset) => void;
 }
 
 export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
@@ -15,6 +18,9 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   profile,
   onNavigateToAnalyst,
   onNavigateToUpload,
+  datasets,
+  selectedDataset,
+  onSelectDataset,
 }) => {
   if (!profile) {
     return (
@@ -41,6 +47,9 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   const charts = profile.profile.dashboard?.charts || [];
   const suggestions = profile.profile.semantic_summary?.potential_analyses || [];
   const quality = profile.profile.data_quality;
+  const isCombined =
+    selectedDataset?.filename.startsWith('Combined_') ||
+    profile.profile.columns.some((c) => c.name === '_source_dataset');
 
   return (
     <div className="space-y-6">
@@ -50,11 +59,44 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           <div className="flex items-center gap-2 text-indigo-600 text-xs font-bold uppercase tracking-wider mb-1">
             <Sparkles className="w-4 h-4" />
             <span>Workspace Analytical Overview</span>
+            {isCombined && (
+              <span className="px-2 py-0.5 rounded-md bg-purple-100 text-purple-800 text-[10px] font-bold uppercase">
+                Single Combined Dataset
+              </span>
+            )}
           </div>
           <h2 className="text-2xl font-extrabold text-slate-900">{workspaceName}</h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Filename: <span className="text-slate-800 font-medium">{profile.profile.basic_info.filename}</span> | {profile.profile.basic_info.row_count.toLocaleString()} rows | {profile.profile.basic_info.column_count} columns
-          </p>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-1">
+            {datasets && datasets.length > 1 && onSelectDataset ? (
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold text-slate-700">Dataset:</span>
+                <select
+                  value={selectedDataset?.id || ''}
+                  onChange={(e) => {
+                    const ds = datasets.find((d) => d.id === e.target.value);
+                    if (ds) onSelectDataset(ds);
+                  }}
+                  className="bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-xs font-semibold text-indigo-700 outline-none focus:border-indigo-600 shadow-xs"
+                >
+                  {datasets.map((ds) => {
+                    const isComb =
+                      ds.filename.startsWith('Combined_') || ds.filename.includes('combined');
+                    return (
+                      <option key={ds.id} value={ds.id}>
+                        {isComb ? `✨ ${ds.filename} (Combined All)` : ds.filename}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            ) : (
+              <span>Filename: <span className="text-slate-800 font-medium">{profile.profile.basic_info.filename}</span></span>
+            )}
+            <span>|</span>
+            <span>{profile.profile.basic_info.row_count.toLocaleString()} rows</span>
+            <span>|</span>
+            <span>{profile.profile.basic_info.column_count} columns</span>
+          </div>
         </div>
         <button
           onClick={() => onNavigateToAnalyst()}

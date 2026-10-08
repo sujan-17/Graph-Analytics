@@ -9,7 +9,7 @@ from app.core.database import get_db
 from app.models.user import User
 from app.models.workspace import Workspace
 from app.models.dataset import Dataset, DatasetProfile
-from app.schemas.dataset import DatasetResponse, DatasetProfileResponse
+from app.schemas.dataset import DatasetResponse, DatasetProfileResponse, CombineDatasetsRequest
 from app.api.auth import get_current_user
 from app.services.storage_service import storage_service
 from app.services.profiling_service import profiling_service
@@ -154,3 +154,111 @@ def delete_dataset(
     db.delete(ds)
     db.commit()
     return {"status": "success", "message": "Dataset deleted."}
+
+@router.post("/workspaces/{workspace_id}/datasets/combine", response_model=DatasetResponse)
+def combine_workspace_datasets(
+    workspace_id: str,
+    req: CombineDatasetsRequest = CombineDatasetsRequest(),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    ws = db.query(Workspace).filter(Workspace.id == workspace_id, Workspace.user_id == current_user.id).first()
+    if not ws:
+        raise HTTPException(status_code=404, detail="Workspace not found or access denied.")
+
+    # Determine which datasets to combine
+    if req.dataset_ids and len(req.dataset_ids) > 0:
+        datasets = db.query(Dataset).filter(
+            Dataset.workspace_id == workspace_id,
+            Dataset.id.in_(req.dataset_ids)
+        ).all()
+        id_order = {did: idx for idx, did in enumerate(req.dataset_ids)}
+        datasets.sort(key=lambda d: id_order.get(d.id, 999))
+    else:
+        datasets = db.query(Dataset).filter(Dataset.workspace_id == workspace_id).order_by(Dataset.created_at.asc()).all()
+
+    if len(datasets) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail=f"At least 2 datasets are required to combine them into a single dataset. Found {len(datasets)} dataset(s)."
+        )
+
+    dfs = []
+    for ds in datasets:
+        if not ds.storage_path or not os.path.exists(ds.storage_path):
+            raise HTTPException(status_code=400, detail=f"Dataset file '{ds.filename}' is missing from storage.")
+        try:
+            df = storage_service.load_dataset_dataframe(ds.storage_path)
+            df.columns = [str(col).strip() for col in df.columns]
+            dfs.append((ds.filename, df))
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to load dataset '{ds.filename}': {str(e)}")
+
+    strategy = (req.merge_strategy or "concat").lower()
+    combined_df = None
+
+    if strategy in ["merge", "join"]:
+        common_cols = set(dfs[0][1].columns)
+        for _, d in dfs[1:]:
+            common_cols = common_cols.intersection(set(d.columns))
+        common_cols = [c for c in common_cols if c != "_source_dataset"]
+
+        if common_cols:
+            combined_df = dfs[0][1]
+            for fname, d in dfs[1:]:
+                combined_df = pd.merge(combined_df, d, on=common_cols, how="outer", suffixes=("", f"_{fname[:8]}"))
+        else:
+            strategy = "concat"
+
+    if strategy == "concat" or combined_df is None:
+        tagged_dfs = []
+        for fname, d in dfs:
+            d_copy = d.copy()
+            d_copy["_source_dataset"] = fname
+            tagged_dfs.append(d_copy)
+        combined_df = pd.concat(tagged_dfs, ignore_index=True, sort=False)
+
+    clean_ws = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in ws.name)
+    if req.combined_name and req.combined_name.strip():
+        comb_fname = req.combined_name.strip()
+        if not comb_fname.lower().endswith(".csv"):
+            comb_fname += ".csv"
+    else:
+        comb_fname = f"Combined_{clean_ws}_{len(datasets)}_datasets.csv"
+
+    csv_bytes = combined_df.to_csv(index=False).encode("utf-8")
+    dataset_id, storage_path = storage_service.save_dataset_file(current_user.id, comb_fname, csv_bytes)
+
+    try:
+        profile_dict = profiling_service.profile_dataset(storage_path, comb_fname)
+        dashboard_spec = dashboard_service.generate_initial_dashboard(storage_path, profile_dict)
+        profile_dict["dashboard"] = dashboard_spec
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to profile combined dataset: {str(e)}")
+
+    row_cnt = profile_dict["basic_info"]["row_count"]
+    col_cnt = profile_dict["basic_info"]["column_count"]
+    q_score = profile_dict["data_quality"]["quality_score"]
+
+    new_dataset = Dataset(
+        id=dataset_id,
+        workspace_id=workspace_id,
+        filename=comb_fname,
+        storage_path=storage_path,
+        row_count=row_cnt,
+        column_count=col_cnt
+    )
+    db.add(new_dataset)
+    db.commit()
+
+    new_profile = DatasetProfile(
+        dataset_id=dataset_id,
+        profile_json=json.dumps(profile_dict),
+        quality_score=q_score
+    )
+    db.add(new_profile)
+    db.commit()
+    db.refresh(new_dataset)
+
+    return new_dataset
+

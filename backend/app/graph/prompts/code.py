@@ -14,7 +14,8 @@ User Question:
 STRICT RULES & SECURITY GUIDELINES:
 1. The DataFrame is pre-loaded as `df`.
 2. Do NOT import OS, sys, subprocess, socket, requests, urllib, or open files.
-3. You MUST store the final analytical output in a variable named `result` (e.g. `result = df.groupby(...)`).
+3. Do NOT import or use matplotlib, seaborn, or plotting libraries. Only compute tabular data and store final output in `result`. Visualization is rendered automatically.
+4. You MUST store the final analytical output in a variable named `result` (e.g. `result = df.groupby(...)`).
 4. Always match exact column names from the dataset profile summary.
 5. If date filtering or time grouping is required, convert date column using `pd.to_datetime(df['col'])`.
 6. MULTI-COLUMN COMBINATIONS:

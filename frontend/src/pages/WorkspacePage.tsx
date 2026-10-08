@@ -49,7 +49,12 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
       setDatasets(dsList);
 
       if (dsList.length > 0) {
-        const activeDs = dsList[0];
+        // Keep active dataset if still present, or prefer combined dataset, or first
+        const combinedDs = dsList.find((d) => d.filename.startsWith('Combined_'));
+        const activeDs =
+          (selectedDataset && dsList.find((d) => d.id === selectedDataset.id)) ||
+          combinedDs ||
+          dsList[0];
         setSelectedDataset(activeDs);
         await loadDatasetProfileAndPreview(activeDs.id);
       } else {
@@ -93,6 +98,29 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
   const handleSelectDataset = async (ds: Dataset) => {
     setSelectedDataset(ds);
     await loadDatasetProfileAndPreview(ds.id);
+  };
+
+  const handleCombineDatasets = async (params?: { dataset_ids?: string[]; combined_name?: string; merge_strategy?: string }) => {
+    try {
+      const combined = await workspaceService.combineDatasets(currentWorkspace.id, params);
+      await loadWorkspaceData();
+      setSelectedDataset(combined);
+      await loadDatasetProfileAndPreview(combined.id);
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.message || 'Failed to combine datasets.';
+      alert(msg);
+      throw err;
+    }
+  };
+
+  const handleDeleteDataset = async (datasetId: string) => {
+    try {
+      await workspaceService.deleteDataset(datasetId);
+      await loadWorkspaceData();
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.message || 'Failed to delete dataset.';
+      alert(msg);
+    }
   };
 
   const handleSendQuestion = async (question: string) => {
@@ -184,6 +212,9 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
               profile={profile}
               onNavigateToAnalyst={handleNavigateToAnalyst}
               onNavigateToUpload={() => setActiveTab('datasets')}
+              datasets={datasets}
+              selectedDataset={selectedDataset}
+              onSelectDataset={handleSelectDataset}
             />
           )}
 
@@ -195,6 +226,9 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
               previewData={previewData}
               onSelectDataset={handleSelectDataset}
               onUploadCSV={handleUploadCSV}
+              onCombineDatasets={handleCombineDatasets}
+              onDeleteDataset={handleDeleteDataset}
+              onNavigateToAnalyst={() => setActiveTab('analyst')}
             />
           )}
 
@@ -209,6 +243,10 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
               activeConversationId={activeConversationId}
               totalPastSessions={totalPastSessions}
               onNavigateToHistory={() => setActiveTab('history')}
+              datasets={datasets}
+              selectedDataset={selectedDataset}
+              onSelectDataset={handleSelectDataset}
+              onCombineDatasets={handleCombineDatasets}
             />
           )}
 

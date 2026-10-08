@@ -1,5 +1,6 @@
 from typing import Dict, Any, List
 from app.graph.state import AnalysisState
+from app.graph.agents.base import BaseAgent
 
 def should_generate_visualization(state: AnalysisState, columns: List[str], data: List[Dict[str, Any]]) -> bool:
     """
@@ -47,7 +48,7 @@ def is_col_id(name: str) -> bool:
     n = name.lower()
     return n.endswith("_id") or n.endswith("id") or n == "id" or "uuid" in n or n.endswith("_no") or "code" in n
 
-def visualization_node(state: AnalysisState) -> Dict[str, Any]:
+def generate_visualization(state: AnalysisState) -> Dict[str, Any]:
     exec_result = state.get("execution_result", {})
     if not exec_result or exec_result.get("type") != "dataframe":
         return {"chart_config": None}
@@ -351,3 +352,28 @@ def visualization_node(state: AnalysisState) -> Dict[str, Any]:
             }
         }
     }
+
+
+class VisualizationAgent(BaseAgent):
+    """
+    Visualization Agent: Data presentation specialist.
+    Determines visual encodings and compiles interactive Plotly JSON specs.
+    """
+    name = "VisualizationAgent"
+    role = "Data Visualization & Plotly Spec Engineering Agent"
+    description = "Generates interactive Plotly specifications based on analytical query outputs."
+
+    def __init__(self):
+        super().__init__(
+            name="VisualizationAgent",
+            role="Data Visualization & Plotly Spec Engineering Agent",
+            description="Transforms tabular results into optimal Plotly JSON chart configs."
+        )
+
+    def invoke(self, state: AnalysisState) -> Dict[str, Any]:
+        return generate_visualization(state)
+
+# Agent instance for LangGraph StateGraph & backward-compatible node export
+visualization_agent = VisualizationAgent()
+visualization_node = visualization_agent
+

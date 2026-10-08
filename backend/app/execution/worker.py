@@ -25,6 +25,12 @@ def run_worker(csv_path: str, code_path: str, output_path: str):
         with open(code_path, "r", encoding="utf-8") as f:
             code_str = f.read()
 
+        def safe_import(name, *args, **kwargs):
+            base_name = name.split(".")[0]
+            if base_name in ["pandas", "numpy", "datetime", "math", "re", "json", "dateutil"]:
+                return __import__(name, *args, **kwargs)
+            raise ImportError(f"Import of module '{name}' is restricted in sandbox.")
+
         # Whitelist of safe builtins to prevent arbitrary execution
         safe_builtins = {
             "abs": abs, "all": all, "any": any, "bool": bool, "dict": dict,
@@ -33,7 +39,8 @@ def run_worker(csv_path: str, code_path: str, output_path: str):
             "list": list, "map": map, "max": max, "min": min, "pow": pow,
             "print": print, "range": range, "reversed": reversed, "round": round,
             "set": set, "slice": slice, "sorted": sorted, "str": str, "sum": sum,
-            "tuple": tuple, "type": type, "zip": zip, "True": True, "False": False, "None": None
+            "tuple": tuple, "type": type, "zip": zip, "True": True, "False": False, "None": None,
+            "__import__": safe_import
         }
 
         # Restricted execution globals

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Plot from '../common/Plot';
 import { Send, Bot, User as UserIcon, Code2, ChevronDown, ChevronUp, Sparkles, Download, Bookmark, AlertCircle, HelpCircle, ArrowRight, Table as TableIcon, Link2, Check, RotateCcw, History, BarChart3, Eye, Layers } from 'lucide-react';
-import { AnalysisResponse, DatasetProfile } from '../../types';
+import { AnalysisResponse, DatasetProfile, Dataset } from '../../types';
 import { AnalysisResultTable } from './AnalysisResultTable';
 
 interface InsightItem {
@@ -71,6 +71,10 @@ interface AIAnalystChatProps {
   activeConversationId?: string;
   totalPastSessions?: number;
   onNavigateToHistory?: () => void;
+  datasets?: Dataset[];
+  selectedDataset?: Dataset | null;
+  onSelectDataset?: (ds: Dataset) => void;
+  onCombineDatasets?: (params?: { dataset_ids?: string[]; combined_name?: string; merge_strategy?: string }) => Promise<void>;
 }
 
 export const AIAnalystChat: React.FC<AIAnalystChatProps> = ({
@@ -83,15 +87,37 @@ export const AIAnalystChat: React.FC<AIAnalystChatProps> = ({
   activeConversationId,
   totalPastSessions,
   onNavigateToHistory,
+  datasets,
+  selectedDataset,
+  onSelectDataset,
+  onCombineDatasets,
 }) => {
   const [inputQuestion, setInputQuestion] = useState(initialQuestion || '');
   const [loading, setLoading] = useState(false);
+  const [isQuickCombining, setIsQuickCombining] = useState(false);
   const [openCodeId, setOpenCodeId] = useState<string | null>(null);
   const [openPlanId, setOpenPlanId] = useState<string | null>(null);
   const [copiedKeyFindingsId, setCopiedKeyFindingsId] = useState<string | null>(null);
   const [activeTabs, setActiveTabs] = useState<Record<string, 'visualization' | 'table'>>({});
   const [pendingQuestion, setPendingQuestion] = useState<string>('');
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const isCurrentDatasetCombined =
+    selectedDataset?.filename.startsWith('Combined_') ||
+    profile?.profile.columns.some((c) => c.name === '_source_dataset');
+  const hasCombinedDataset = datasets?.some((d) => d.filename.startsWith('Combined_'));
+
+  const handleQuickCombine = async () => {
+    if (!onCombineDatasets) return;
+    setIsQuickCombining(true);
+    try {
+      await onCombineDatasets();
+    } catch (err) {
+      // Handled in parent
+    } finally {
+      setIsQuickCombining(false);
+    }
+  };
 
   const getActiveTab = (a: AnalysisResponse): 'visualization' | 'table' => {
     if (activeTabs[a.id]) {
@@ -150,16 +176,65 @@ export const AIAnalystChat: React.FC<AIAnalystChatProps> = ({
     <div className="flex flex-col h-[calc(100vh-6.5rem)] bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       {/* Active Dataset Context Bar & Conversational Session Controls */}
       {profile && (
-        <div className="bg-slate-50 border-b border-slate-200 px-6 py-2.5 flex items-center justify-between text-xs text-slate-600 shrink-0">
-          <div className="flex items-center gap-2">
-            <Bot className="w-4 h-4 text-indigo-600" />
-            <span className="font-semibold text-slate-800">Active Dataset:</span>
-            <span className="font-mono text-indigo-600 font-semibold">{profile.profile.basic_info.filename}</span>
-            <span className="text-slate-300">|</span>
-            <span className="text-slate-500">{profile.profile.basic_info.row_count.toLocaleString()} rows</span>
+        <div className="bg-slate-50 border-b border-slate-200 px-6 py-2.5 flex flex-wrap items-center justify-between text-xs text-slate-600 shrink-0 gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Bot className="w-4 h-4 text-indigo-600 shrink-0" />
+
+            {datasets && datasets.length > 1 && onSelectDataset ? (
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold text-slate-800">Dataset:</span>
+                <select
+                  value={selectedDataset?.id || ''}
+                  onChange={(e) => {
+                    const ds = datasets.find((d) => d.id === e.target.value);
+                    if (ds) onSelectDataset(ds);
+                  }}
+                  className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-semibold text-indigo-700 outline-none focus:border-indigo-600 shadow-xs max-w-xs"
+                >
+                  {datasets.map((ds) => {
+                    const isComb =
+                      ds.filename.startsWith('Combined_') || ds.filename.includes('combined');
+                    return (
+                      <option key={ds.id} value={ds.id}>
+                        {isComb ? `✨ ${ds.filename} (Combined All)` : ds.filename} ({ds.row_count.toLocaleString()} rows)
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            ) : (
+              <>
+                <span className="font-semibold text-slate-800">Active Dataset:</span>
+                <span className="font-mono text-indigo-600 font-semibold">{profile.profile.basic_info.filename}</span>
+              </>
+            )}
+
+            {isCurrentDatasetCombined && (
+              <span className="px-2 py-0.5 rounded-md bg-purple-100 text-purple-800 border border-purple-200 text-[11px] font-bold flex items-center gap-1 shadow-xs">
+                <Sparkles className="w-3 h-3 text-purple-600" />
+                <span>Single Combined Dataset</span>
+              </span>
+            )}
+
+            <span className="text-slate-300 hidden sm:inline">|</span>
+            <span className="text-slate-500 hidden sm:inline">{profile.profile.basic_info.row_count.toLocaleString()} rows</span>
+
+            {datasets && datasets.length >= 2 && !hasCombinedDataset && onCombineDatasets && (
+              <button
+                type="button"
+                onClick={handleQuickCombine}
+                disabled={isQuickCombining}
+                className="ml-1 px-2.5 py-1 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-medium text-[11px] flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                title="Combine all datasets into a single dataset so AI can answer across all tables"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>{isQuickCombining ? 'Combining...' : `Combine All (${datasets.length}) to Single`}</span>
+              </button>
+            )}
+
             {analyses.length > 0 && (
               <>
-                <span className="text-slate-300">|</span>
+                <span className="text-slate-300 hidden sm:inline">|</span>
                 <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 text-[11px] font-medium">
                   {analyses.length} {analyses.length === 1 ? 'turn in session' : 'turns in session'}
                 </span>
@@ -201,13 +276,43 @@ export const AIAnalystChat: React.FC<AIAnalystChatProps> = ({
       <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/40">
         {analyses.length === 0 && !loading && (
           <div className="flex flex-col items-center justify-center h-full text-center max-w-md mx-auto space-y-4 text-slate-500">
-            <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm">
-              <Sparkles className="w-8 h-8" />
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-sm ${
+              isCurrentDatasetCombined
+                ? 'bg-purple-50 border border-purple-200 text-purple-600'
+                : 'bg-indigo-50 border border-indigo-100 text-indigo-600'
+            }`}>
+              {isCurrentDatasetCombined ? <Layers className="w-8 h-8" /> : <Sparkles className="w-8 h-8" />}
             </div>
-            <h3 className="text-lg font-bold text-slate-900">Stateful AI Conversational Analyst</h3>
+            <h3 className="text-lg font-bold text-slate-900">
+              {isCurrentDatasetCombined ? 'Cross-Dataset Conversational Intelligence' : 'Stateful AI Conversational Analyst'}
+            </h3>
             <p className="text-xs leading-relaxed">
-              Ask natural language business questions about your dataset. The multi-agent graph will understand intent, formulate an analysis plan, generate safe Pandas code, execute isolated analysis, and synthesize executive insights.
+              {isCurrentDatasetCombined
+                ? 'All workbench datasets are combined into this single unified dataset. The AI will answer questions across all tables, breakdown metrics by source file, or perform cross-dataset queries.'
+                : 'Ask natural language business questions about your dataset. The multi-agent graph will understand intent, formulate an analysis plan, generate safe Pandas code, execute isolated analysis, and synthesize executive insights.'}
             </p>
+
+            {datasets && datasets.length >= 2 && !isCurrentDatasetCombined && onCombineDatasets && (
+              <div className="w-full p-3.5 rounded-xl bg-purple-50 border border-purple-200 text-left space-y-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-purple-900">
+                  <Layers className="w-4 h-4 text-purple-600" />
+                  <span>Combine {datasets.length} Workbench Datasets into Single</span>
+                </div>
+                <p className="text-[11px] text-purple-700">
+                  You have {datasets.length} datasets uploaded in this workbench. Combine them into a single dataset so AI can answer across all tables simultaneously.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleQuickCombine}
+                  disabled={isQuickCombining}
+                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>{isQuickCombining ? 'Combining...' : 'Combine into Single Dataset Now'}</span>
+                </button>
+              </div>
+            )}
+
             {onNavigateToHistory && (totalPastSessions ?? 0) > 0 && (
               <div className="pt-1">
                 <button
@@ -220,9 +325,19 @@ export const AIAnalystChat: React.FC<AIAnalystChatProps> = ({
                 </button>
               </div>
             )}
+
             <div className="w-full space-y-2 pt-2">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Example Questions:</p>
-              {profile?.profile.semantic_summary?.potential_analyses.slice(0, 3).map((q, idx) => (
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                {isCurrentDatasetCombined ? 'Cross-Dataset Example Questions:' : 'Example Questions:'}
+              </p>
+              {(isCurrentDatasetCombined
+                ? [
+                    'Show row counts and distribution grouped by _source_dataset',
+                    'Compare key performance metrics across each dataset in this workbench',
+                    'Give an executive analytical summary of all combined datasets'
+                  ]
+                : profile?.profile.semantic_summary?.potential_analyses.slice(0, 3) || []
+              ).map((q, idx) => (
                 <button
                   key={idx}
                   onClick={() => handleFollowUp(q)}

@@ -59,6 +59,16 @@ def run_conversational_analysis(
 
     # Select active dataset
     dataset_id = req.dataset_id
+    if dataset_id in ["combined", "all"]:
+        comb_ds = db.query(Dataset).filter(
+            Dataset.workspace_id == workspace_id,
+            Dataset.filename.like("Combined_%")
+        ).order_by(Dataset.created_at.desc()).first()
+        if comb_ds:
+            dataset_id = comb_ds.id
+        else:
+            dataset_id = None
+
     if not dataset_id:
         latest_ds = db.query(Dataset).filter(Dataset.workspace_id == workspace_id).order_by(Dataset.created_at.desc()).first()
         if not latest_ds:

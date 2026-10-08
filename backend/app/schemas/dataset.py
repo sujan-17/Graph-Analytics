@@ -22,3 +22,9 @@ class DatasetProfileResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class CombineDatasetsRequest(BaseModel):
+    dataset_ids: Optional[List[str]] = None
+    combined_name: Optional[str] = None
+    merge_strategy: Optional[str] = "concat"
+
