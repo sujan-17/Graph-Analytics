@@ -152,10 +152,16 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
     setSavedInsights((prev) => prev.filter((i) => i.id !== id));
   };
 
-  const handleCreateReport = async (name: string) => {
-    await analysisService.createReport(currentWorkspace.id, name);
+  const handleCreateReport = async (name: string, datasetId?: string) => {
+    const newRep = await analysisService.createReport(currentWorkspace.id, name, datasetId);
     const repList = await analysisService.listReports(currentWorkspace.id);
     setReports(repList);
+    return newRep;
+  };
+
+  const handleDeleteReport = async (id: string) => {
+    await analysisService.deleteReport(id);
+    setReports((prev) => prev.filter((r) => r.id !== id));
   };
 
   // Filter analyses for the active conversational session in chat
@@ -262,8 +268,11 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
             <ReportsManager
               savedInsights={savedInsights}
               reports={reports}
+              datasets={datasets}
+              selectedDataset={selectedDataset}
               onDeleteInsight={handleDeleteInsight}
               onCreateReport={handleCreateReport}
+              onDeleteReport={handleDeleteReport}
             />
           )}
         </main>

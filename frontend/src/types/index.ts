@@ -132,11 +132,73 @@ export interface SavedInsight {
   created_at: string;
 }
 
+export interface AnalystReportData {
+  report_title: string;
+  dataset_name: string;
+  generated_at: string;
+  summary_metrics: {
+    row_count: number;
+    column_count: number;
+    file_size_bytes?: number;
+    memory_mb?: number;
+    quality_score: number;
+    missing_percentage: number;
+    duplicate_rows: number;
+  };
+  executive_summary: string;
+  what_data_is_analysed: {
+    overview: string;
+    metrics_analysis?: string;
+    dimensions_analysis?: string;
+    quality_audit?: string;
+    numeric_metrics?: Array<{
+      name: string;
+      total?: number;
+      mean?: number;
+      median?: number;
+      min?: number;
+      max?: number;
+      std?: number;
+      quartiles?: number[];
+      null_count?: number;
+    }>;
+    categorical_dimensions?: Array<{
+      name: string;
+      unique_count: number;
+      top_categories: Record<string, number>;
+      top_percentages: Record<string, number>;
+      null_count?: number;
+    }>;
+  };
+  what_dataset_depicts: {
+    general_depiction: string;
+    key_patterns: Array<{
+      title: string;
+      description: string;
+    }>;
+    comparative_findings?: string;
+    anomalies_and_risks?: string;
+  };
+  what_can_be_done: {
+    strategic_actions: Array<{
+      title: string;
+      description: string;
+    }>;
+    advanced_analytics: Array<{
+      title: string;
+      description: string;
+    }>;
+    data_enrichment?: string;
+  };
+}
+
 export interface Report {
   id: string;
   workspace_id: string;
+  dataset_id?: string;
   name: string;
   file_path: string;
   download_url: string;
   created_at: string;
+  report_data?: AnalystReportData;
 }
