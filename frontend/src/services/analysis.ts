@@ -38,13 +38,25 @@ export const analysisService = {
     await API.delete(`/insights/${id}`);
   },
 
-  async createReport(workspaceId: string, name: string): Promise<Report> {
-    const res = await API.post(`/workspaces/${workspaceId}/reports`, { name });
+  async createReport(workspaceId: string, name: string, datasetId?: string): Promise<Report> {
+    const res = await API.post(`/workspaces/${workspaceId}/reports`, {
+      name,
+      dataset_id: datasetId
+    });
     return res.data;
   },
 
   async listReports(workspaceId: string): Promise<Report[]> {
     const res = await API.get(`/workspaces/${workspaceId}/reports`);
     return res.data;
+  },
+
+  async getReport(reportId: string): Promise<Report> {
+    const res = await API.get(`/reports/${reportId}`);
+    return res.data;
+  },
+
+  async deleteReport(reportId: string): Promise<void> {
+    await API.delete(`/reports/${reportId}`);
   }
 };

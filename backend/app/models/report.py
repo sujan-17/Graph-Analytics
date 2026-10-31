@@ -21,8 +21,11 @@ class Report(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=False)
+    dataset_id = Column(String(36), ForeignKey("datasets.id"), nullable=True)
     name = Column(String(255), nullable=False)
     file_path = Column(String(512), nullable=False)
+    content_json = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     workspace = relationship("Workspace", back_populates="reports")
+    dataset = relationship("Dataset")

@@ -16,6 +16,19 @@ from app.api.reports import router as reports_router
 # Initialize SQLite database tables
 Base.metadata.create_all(bind=engine)
 
+# Ensure schema migrations for SQLite
+try:
+    with engine.connect() as conn:
+        from sqlalchemy import text
+        cols = [c[1] for c in conn.execute(text("PRAGMA table_info(reports)")).fetchall()]
+        if "dataset_id" not in cols:
+            conn.execute(text("ALTER TABLE reports ADD COLUMN dataset_id VARCHAR(36)"))
+        if "content_json" not in cols:
+            conn.execute(text("ALTER TABLE reports ADD COLUMN content_json TEXT"))
+        conn.commit()
+except Exception as e:
+    print(f"Database migration notice: {e}")
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="Multi-Agent System for Stateful Data Analysis using LangChain and LangGraph",

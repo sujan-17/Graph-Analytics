@@ -240,18 +240,19 @@ The **Analysis History** tab provides an immutable audit trail of every past ana
 
 ---
 
-### 2.7 Saved Insights & Executive PDF Reports
-The **Reports & Insights** tab turns ad-hoc findings into formal executive documents:
-- Displays bookmarked insights with timestamp and delete actions.
-- Form input for custom report titles.
-- Compiles an executive PDF document using **ReportLab**, including:
-  - Branded executive header with metadata and generation date.
-  - Executive summary section.
-  - Dataset health score table and metadata breakdown.
-  - List of saved business insights.
-  - Analysis audit history showing questions and findings.
-  - Methodology and security disclaimer.
-- Direct PDF download with tokenized authentication.
+### 2.7 Autonomous Dataset Analyst & Executive Reports
+The **Reports & Insights** tab functions as an autonomous data analyst intelligence hub:
+- **Targeted Dataset Selection**: Select any dataset in the workspace to evaluate.
+- **Pure Dataset Analytics (No Chat Queries / No Chat History)**: Completely objective, data-analyst-grade report focused purely on the dataset itself without ad-hoc user query history.
+- **3 Core Analyst Pillars**:
+  1. **Executive Summary & Scope**: Domain depiction, sample size, observation timeframe, and top-line conclusion.
+  2. **What Data Was Analysed**: Summary KPI cards, primary quantitative measures table (Totals, Means, Min/Max, Std Dev), categorical dimensions breakdown with distribution percentages, and data quality health audit.
+  3. **What The Dataset Depicts Generally**: Operational baseline narrative, key distribution & concentration patterns, comparative segmentation findings, and anomaly/risk notes.
+  4. **What Can Be Done**: Prescriptive strategic business actions, advanced data science / ML roadmap (forecasting, clustering, regression), and future feature tracking enrichment.
+- **Interactive In-App Viewer & ReportLab PDF Export**:
+  - Live interactive dossier viewer with section navigation.
+  - Formatted ReportLab PDF export with matching executive typography, KPI blocks, and tables.
+  - Generated reports archive with live viewing, PDF downloading, and deletion.
 
 ---
 
