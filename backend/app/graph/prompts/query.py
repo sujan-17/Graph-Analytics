@@ -12,7 +12,11 @@ User Question:
 "{user_query}"
 
 Instructions:
-1. Identify intent type (e.g. aggregation, grouping, filtering, ranking, comparison, trend, distribution, relationship, outlier).
+0. DATASET RELEVANCE EVALUATION:
+   - Determine whether the user query is querying or related to this dataset:
+     - Set `is_dataset_related: true` if the question asks to compute, summarize, filter, show, plot, or inspect data from the uploaded dataset, or refers to past dataset analyses.
+     - Set `is_dataset_related: false` if the question is a normal/general query NOT asking about this dataset (e.g., greetings like "hi", "who are you", general explanations like "what is ROI", "explain p-value", general programming help, math questions, general conversation). For general questions, set `intent: "general_knowledge"`, `presentation_type: "conversational"`, and `needs_clarification: false`.
+1. Identify intent type (e.g. aggregation, grouping, filtering, ranking, comparison, trend, distribution, relationship, outlier, general_knowledge).
 2. MULTI-COLUMN COMBINATIONS & GROUPINGS:
    - When the query involves two or more grouping columns or metrics (e.g. "sales by region and category", "profit and sales by segment and ship mode"), include ALL requested dimensions in `group_by` and ALL requested metrics in `metrics`. Do not drop any column!
 3. ENTITY & ID IDENTIFICATION (CRITICAL):
@@ -32,16 +36,18 @@ Instructions:
      b) Merge and preserve previous grouping dimensions and metrics from the conversation history, adding or updating the newly requested filter, metric, or dimension.
      c) For example, if the previous query was "Sales and profit by Region and Category" and the user asks "Now filter that only for Enterprise customers", the intent should have:
         metrics: ["Sales", "Profit"], group_by: ["Region", "Category"], filters: {{"Customer Type": "Enterprise"}}, refers_to_previous: true.
-7. PRESENTATION DECISION (Visualization vs Table Oversight vs KPI):
+7. PRESENTATION DECISION (Visualization vs Table Oversight vs KPI vs Conversational):
    - Determine the primary presentation format:
      a) "visualization": Analytical queries involving aggregations, groupings, comparisons, breakdowns, distributions, or trends (e.g. "average quantity per customer", "sales by region").
      b) "kpi": Queries asking for a single scalar metric total/value without grouping (e.g. "total profit", "what is the average sales").
      c) "table": Queries explicitly requesting records, rows, lists, details, or tabular oversight (e.g. "show table", "list all orders", "give me details of", "who bought", "raw data").
+     d) "conversational": General, non-dataset queries, greetings, or conceptual questions.
 
 Return JSON strictly matching this schema:
 {{
-  "intent": "aggregation | grouping | filtering | ranking | comparison | trend | distribution",
-  "presentation_type": "visualization | table | kpi",
+  "is_dataset_related": true or false,
+  "intent": "aggregation | grouping | filtering | ranking | comparison | trend | distribution | general_knowledge",
+  "presentation_type": "visualization | table | kpi | conversational",
   "metric": "primary_matched_column or null",
   "metrics": ["matched_metric_1", "matched_metric_2"] or null,
   "group_by": ["matched_dimension_1", "matched_dimension_2"] or null,

@@ -13,6 +13,7 @@ class AnalysisState(TypedDict):
     conversation_history_summary: Optional[str]
     
     # Node outputs
+    is_dataset_related: bool
     query_intent: Optional[Dict[str, Any]]
     needs_clarification: bool
     clarification_message: Optional[str]

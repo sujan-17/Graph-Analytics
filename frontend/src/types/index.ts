@@ -108,7 +108,7 @@ export interface AnalysisResponse {
     type: string;
     spec: any;
   };
-  presentation_type?: 'visualization' | 'table' | 'kpi';
+  presentation_type?: 'visualization' | 'table' | 'kpi' | 'conversational';
   data_oversight?: {
     total_records: number;
     metric_totals?: Record<string, number>;

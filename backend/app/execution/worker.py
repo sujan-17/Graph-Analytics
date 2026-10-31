@@ -1,3 +1,4 @@
+import os
 import sys
 import re
 import json
@@ -8,18 +9,31 @@ import numpy as np
 def run_worker(csv_path: str, code_path: str, output_path: str):
     try:
         # Load dataset safely into Pandas DataFrame
-        df = pd.read_csv(csv_path)
+        cache_path = csv_path + ".cached.pkl"
+        df = None
+        if os.path.exists(cache_path):
+            try:
+                if os.path.getmtime(cache_path) >= os.path.getmtime(csv_path):
+                    df = pd.read_pickle(cache_path)
+            except Exception:
+                df = None
+        if df is None:
+            df = pd.read_csv(csv_path)
 
-        # Parse genuine date/time columns if present
-        date_pattern = re.compile(r"(^|[_\s])(date|time|timestamp|datetime)($|[_\s])", re.IGNORECASE)
-        for col in df.columns:
-            if date_pattern.search(str(col)):
-                try:
-                    converted = pd.to_datetime(df[col], errors='coerce')
-                    if converted.notna().sum() > 0:
-                        df[col] = converted
-                except Exception:
-                    pass
+            # Parse genuine date/time columns if present
+            date_pattern = re.compile(r"(^|[_\s])(date|time|timestamp|datetime)($|[_\s])", re.IGNORECASE)
+            for col in df.columns:
+                if date_pattern.search(str(col)):
+                    try:
+                        converted = pd.to_datetime(df[col], errors='coerce')
+                        if converted.notna().sum() > 0:
+                            df[col] = converted
+                    except Exception:
+                        pass
+            try:
+                df.to_pickle(cache_path)
+            except Exception:
+                pass
 
         # Read generated python code
         with open(code_path, "r", encoding="utf-8") as f:

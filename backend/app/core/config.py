@@ -16,13 +16,13 @@ class Settings(BaseSettings):
     
     # Gemini / Google LLM key
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", os.getenv("GOOGLE_API_KEY", ""))
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "gemini-flash-latest")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "gemini-2.5-flash")
 
     # SQLite DB
     DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///{os.path.abspath(os.path.join(os.path.dirname(__file__), '../../graph_analytics.db'))}")
 
     class Config:
-        env_file = ".env"
+        env_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.env")) if os.path.exists(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.env"))) else ".env"
         extra = "allow"
 
 settings = Settings()

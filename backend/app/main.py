@@ -12,6 +12,7 @@ from app.api.analysis import router as analysis_router
 from app.api.chat import router as chat_router
 from app.api.insights import router as insights_router
 from app.api.reports import router as reports_router
+from app.api.voice import router as voice_router
 
 # Initialize SQLite database tables
 Base.metadata.create_all(bind=engine)
@@ -53,6 +54,7 @@ app.include_router(analysis_router, prefix=settings.API_V1_STR)
 app.include_router(chat_router, prefix=settings.API_V1_STR)
 app.include_router(insights_router, prefix=settings.API_V1_STR)
 app.include_router(reports_router, prefix=settings.API_V1_STR)
+app.include_router(voice_router, prefix=settings.API_V1_STR)
 
 @app.get("/")
 def root_status():

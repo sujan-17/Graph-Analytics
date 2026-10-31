@@ -221,7 +221,12 @@ class CodeGeneratorAgent(BaseAgent):
                 matched_num = [c for c in num_cols if c in intent_metrics or c.lower() in q_low]
                 target_nums = matched_num if matched_num else (num_cols[:1] if num_cols else [])
 
-                target_cats = matched_cat if matched_cat else ([c for c in cat_cols if c.lower() in q_low] or (cat_cols[:1] if cat_cols else []))
+                target_cats = list(matched_cat)
+                for c in cat_cols:
+                    if c.lower() in q_low and c not in target_cats:
+                        target_cats.append(c)
+                if not target_cats:
+                    target_cats = cat_cols[:1] if cat_cols else []
 
                 if target_cats and target_nums:
                     cat_repr = "[" + ", ".join(repr(c) for c in target_cats) + "]" if len(target_cats) > 1 else repr(target_cats[0])

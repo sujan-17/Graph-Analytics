@@ -9,11 +9,17 @@ from app.graph.nodes.recovery import recovery_agent, recovery_node
 from app.graph.nodes.result_validator import result_validator_agent, result_validator_node
 from app.graph.nodes.visualization import visualization_agent, visualization_node
 from app.graph.nodes.insights import insights_agent, insights_node
+from app.graph.nodes.general_responder import general_responder_agent, general_responder_node
 
-def check_clarification_needed(state: AnalysisState) -> str:
+def route_query_understanding(state: AnalysisState) -> str:
+    if not state.get("is_dataset_related", True):
+        return "general_responder"
     if state.get("needs_clarification", False):
         return "clarification_needed"
     return "proceed_to_planner"
+
+def check_clarification_needed(state: AnalysisState) -> str:
+    return route_query_understanding(state)
 
 def check_execution_status(state: AnalysisState) -> str:
     if state.get("validation_result", False):
@@ -32,6 +38,7 @@ def build_analysis_graph():
     # Register LangGraph Agent nodes
     workflow.add_node("context", context_agent)
     workflow.add_node("query_understanding", query_understanding_agent)
+    workflow.add_node("general_responder", general_responder_agent)
     workflow.add_node("planner", planner_agent)
     workflow.add_node("code_generator", code_generator_agent)
     workflow.add_node("executor", executor_agent)
@@ -46,15 +53,19 @@ def build_analysis_graph():
     # Flow edges
     workflow.add_edge("context", "query_understanding")
 
-    # Conditional edge after query understanding
+    # Conditional edge after query understanding: routes general queries directly to general_responder
     workflow.add_conditional_edges(
         "query_understanding",
-        check_clarification_needed,
+        route_query_understanding,
         {
+            "general_responder": "general_responder",
             "clarification_needed": END,
             "proceed_to_planner": "planner"
         }
     )
+
+    # General questions end after response
+    workflow.add_edge("general_responder", END)
 
     workflow.add_edge("planner", "code_generator")
     workflow.add_edge("code_generator", "executor")

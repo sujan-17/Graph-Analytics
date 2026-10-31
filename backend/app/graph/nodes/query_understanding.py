@@ -129,11 +129,11 @@ class QueryUnderstandingAgent(BaseAgent):
         if not intent_data:
             num_cols = [
                 c.get("name") for c in columns
-                if not is_col_id(c.get("name", "")) and any(t in c.get("data_type", "").lower() for t in ["int", "float", "double", "decimal", "numeric"])
+                if not is_col_id(c.get("name", "")) and any(t in (c.get("data_type") or "").lower() for t in ["int", "float", "double", "decimal", "numeric"])
             ]
             cat_cols = [
                 c.get("name") for c in columns
-                if any(t in c.get("data_type", "").lower() for t in ["str", "object", "string", "category", "text"])
+                if any(t in (c.get("data_type") or "").lower() for t in ["str", "object", "string", "category", "text"])
             ]
             id_cols = [c.get("name") for c in columns if is_col_id(c.get("name", ""))]
             
@@ -209,25 +209,58 @@ class QueryUnderstandingAgent(BaseAgent):
                 "clarification_options": None
             }
 
-        table_keywords = ["show table", "output table", "tabular", "as a table", "raw table", "list all rows", "show records", "show rows", "raw data", "details of", "give me details"]
-        is_table_query = any(k in user_query.lower() for k in table_keywords)
+        # Evaluate dataset relevance vs general query
+        is_dataset_related = intent_data.get("is_dataset_related", True)
+        q_clean = user_query.strip().lower()
+        is_greeting = q_clean in [
+            "hi", "hello", "hey", "hi there", "hello there", "good morning",
+            "good afternoon", "good evening", "howdy", "who are you", "what are you",
+            "help", "who made you", "what can you do"
+        ]
 
-        pres_type = intent_data.get("presentation_type")
-        if is_table_query:
-            intent_data["presentation_type"] = "table"
-        elif not pres_type or pres_type not in ["visualization", "table", "kpi"]:
-            if intent_data.get("intent") in ["filtering", "lookup", "detail"] and not intent_data.get("group_by"):
+        if is_greeting or intent_data.get("intent") in ["general_knowledge", "chit_chat", "general"]:
+            is_dataset_related = False
+        elif is_dataset_related and not intent_data.get("metric") and not intent_data.get("metrics") and not intent_data.get("group_by") and not intent_data.get("filters"):
+            general_prefixes = [
+                "what is", "what are", "how do", "how does", "why is", "why do",
+                "explain", "tell me about", "who is", "can you explain", "write a",
+                "define"
+            ]
+            has_gen_prefix = any(q_clean.startswith(p + " ") or q_clean == p for p in general_prefixes)
+            has_col_match = any(c.lower() in q_clean for c in all_col_names if c and len(c) > 2)
+            if has_gen_prefix and not has_col_match:
+                is_dataset_related = False
+
+        intent_data["is_dataset_related"] = is_dataset_related
+
+        if not is_dataset_related:
+            intent_data["intent"] = "General Query"
+            intent_data["presentation_type"] = "conversational"
+            intent_data["needs_clarification"] = False
+            needs_clarification = False
+            clarification_msg = None
+            clarification_opts = None
+        else:
+            table_keywords = ["show table", "output table", "tabular", "as a table", "raw table", "list all rows", "show records", "show rows", "raw data", "details of", "give me details"]
+            is_table_query = any(k in user_query.lower() for k in table_keywords)
+
+            pres_type = intent_data.get("presentation_type")
+            if is_table_query:
                 intent_data["presentation_type"] = "table"
-            elif intent_data.get("intent") == "aggregation" and not intent_data.get("group_by") and not any(k in user_query.lower() for k in ["by", "per", "across", "compare", "how many"]):
-                intent_data["presentation_type"] = "kpi"
-            else:
-                intent_data["presentation_type"] = "visualization"
+            elif not pres_type or pres_type not in ["visualization", "table", "kpi"]:
+                if intent_data.get("intent") in ["filtering", "lookup", "detail"] and not intent_data.get("group_by"):
+                    intent_data["presentation_type"] = "table"
+                elif intent_data.get("intent") == "aggregation" and not intent_data.get("group_by") and not any(k in user_query.lower() for k in ["by", "per", "across", "compare", "how many"]):
+                    intent_data["presentation_type"] = "kpi"
+                else:
+                    intent_data["presentation_type"] = "visualization"
 
-        needs_clarification = intent_data.get("needs_clarification", False)
-        clarification_msg = intent_data.get("clarification_message")
-        clarification_opts = intent_data.get("clarification_options")
+            needs_clarification = intent_data.get("needs_clarification", False)
+            clarification_msg = intent_data.get("clarification_message")
+            clarification_opts = intent_data.get("clarification_options")
 
         return {
+            "is_dataset_related": is_dataset_related,
             "query_intent": intent_data,
             "needs_clarification": needs_clarification,
             "clarification_message": clarification_msg,

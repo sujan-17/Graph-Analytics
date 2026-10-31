@@ -17,6 +17,9 @@ from app.graph.graph import analysis_graph
 
 router = APIRouter(tags=["analysis"])
 
+# Fast in-memory state cache for repeated queries within identical conversation state
+_analysis_cache: dict = {}
+
 def compute_data_oversight(result_table: Optional[List[dict]], query_intent: Optional[dict]) -> dict:
     if not result_table:
         return {"total_records": 0, "metric_totals": {}, "dimensions": [], "filters": {}}
@@ -118,6 +121,7 @@ def run_conversational_analysis(
         "gemini_api_key": settings.GEMINI_API_KEY,
         "dataset_profile_summary": None,
         "conversation_history_summary": None,
+        "is_dataset_related": True,
         "query_intent": None,
         "needs_clarification": False,
         "clarification_message": None,
@@ -138,11 +142,22 @@ def run_conversational_analysis(
     }
 
     # Execute LangGraph Multi-Agent Workflow
-    final_state = analysis_graph.invoke(initial_state)
+    cache_key = (workspace_id, dataset_id, req.question.strip().lower(), conv_id, len(prev_messages))
+    if cache_key in _analysis_cache:
+        final_state = _analysis_cache[cache_key]
+    else:
+        final_state = analysis_graph.invoke(initial_state)
+        if final_state.get("validation_result", False):
+            if len(_analysis_cache) > 256:
+                _analysis_cache.clear()
+            _analysis_cache[cache_key] = final_state
 
     err_msg = final_state.get("execution_error")
+    is_dataset_related = final_state.get("is_dataset_related", True)
     if final_state.get("needs_clarification", False):
         exec_status = "CLARIFICATION_NEEDED"
+    elif not is_dataset_related:
+        exec_status = "SUCCESS"
     elif err_msg or not final_state.get("validation_result", False):
         exec_status = "FAILED"
     else:
@@ -193,7 +208,9 @@ def run_conversational_analysis(
     intent_data = final_state.get("query_intent") or {}
     pres_type = intent_data.get("presentation_type")
     if not pres_type:
-        if intent_data.get("intent") in ["filtering", "lookup", "detail"] and not intent_data.get("group_by"):
+        if not is_dataset_related:
+            pres_type = "conversational"
+        elif intent_data.get("intent") in ["filtering", "lookup", "detail"] and not intent_data.get("group_by"):
             pres_type = "table"
         elif final_state.get("chart_config"):
             pres_type = "visualization"
